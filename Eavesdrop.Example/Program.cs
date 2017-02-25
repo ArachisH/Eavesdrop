@@ -12,7 +12,6 @@ namespace Eavesdrop.Example
             Eavesdropper.ResponseIntercepted += ResponseIntercepted;
 
             // Eavesdropper.RemoteProxy = new WebProxy(":");
-            Eavesdropper.Certifier.DestroySignedCertificates();
             Eavesdropper.Certifier.CreateTrustedRootCertificate();
             Eavesdropper.Initiate(8181);
 
