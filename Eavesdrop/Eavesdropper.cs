@@ -152,6 +152,7 @@ namespace Eavesdrop
                 WebResponse response = null;
                 try { response = requestArgs.Request.GetResponse(); }
                 catch (WebException ex) { response = ex.Response; }
+                catch (ProtocolViolationException) { response = null; }
                 if (response == null) return;
 
                 using (response)
