@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Security.Cryptography;
@@ -24,24 +25,27 @@ namespace Eavesdrop
 
         public X509Store MyStore { get; }
         public X509Store RootStore { get; }
+        public FileInfo MakeCertInfo { get; }
 
         public bool IsDisposed { get; private set; }
 
         public Certifier(string issuer, string rootCertificateName)
         {
-            Issuer = issuer;
-            RootCertificateName = rootCertificateName;
-
-            MyStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-            RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
-
+            string currentDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            MakeCertInfo = new FileInfo(Path.Combine(currentDirectory, "makecert.exe"));
+            
             _certCreateProcess = new Process();
             _certCreateProcess.StartInfo.Verb = "runas";
             _certCreateProcess.StartInfo.CreateNoWindow = true;
             _certCreateProcess.StartInfo.UseShellExecute = false;
-            _certCreateProcess.StartInfo.FileName = "makecert.exe";
-
+            _certCreateProcess.StartInfo.FileName = MakeCertInfo.FullName;
             _certificateCache = new Dictionary<string, X509Certificate2>();
+
+            Issuer = issuer;
+            RootCertificateName = rootCertificateName;
+            
+            MyStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
         }
 
         public bool CreateTrustedRootCertificate()
@@ -237,8 +241,8 @@ namespace Eavesdrop
         {
             lock (_certCreateProcess)
             {
-                if (!File.Exists("makecert.exe"))
-                    throw new Exception("Unable to locate 'makecert.exe'.");
+                if (!File.Exists(MakeCertInfo.FullName))
+                    throw new Exception($"Unable to locate '{MakeCertInfo.Name}'.");
 
                 _certCreateProcess.StartInfo.Arguments =
                     (args != null ? args[0] : string.Empty);
