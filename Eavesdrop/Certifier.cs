@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using Org.BouncyCastle.X509;
@@ -169,7 +170,11 @@ namespace Eavesdrop
             }
             else
             {
-                X509Certificate2 rootCA = InstallCertificate(RootStore, RootCertificateName);
+                if (_privKey == null)
+                {
+                    X509Certificate2 rootCA = InstallCertificate(RootStore, RootCertificateName);
+                    _privKey = TransformRSAPrivateKey(rootCA.PrivateKey);
+                }
                 issuerPrivKey = _privKey;
             }
 
@@ -196,6 +201,22 @@ namespace Eavesdrop
                 x509.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
             }
             return x509;
+        }
+
+        private AsymmetricKeyParameter TransformRSAPrivateKey(AsymmetricAlgorithm privateKey)
+        {
+            var prov = (RSACryptoServiceProvider)privateKey;
+            RSAParameters parameters = prov.ExportParameters(true);
+
+            return new RsaPrivateCrtKeyParameters(
+                new BigInteger(1, parameters.Modulus),
+                new BigInteger(1, parameters.Exponent),
+                new BigInteger(1, parameters.D),
+                new BigInteger(1, parameters.P),
+                new BigInteger(1, parameters.Q),
+                new BigInteger(1, parameters.DP),
+                new BigInteger(1, parameters.DQ),
+                new BigInteger(1, parameters.InverseQ));
         }
 
         public void DestroyCertificates()
