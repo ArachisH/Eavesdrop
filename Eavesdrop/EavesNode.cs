@@ -209,7 +209,7 @@ namespace Eavesdrop
                     new SslStream(DataStream, false);
 
                 X509Certificate2 certificate =
-                    Certifier.CreateCertificate(hostname);
+                    Certifier.GenerateCertificate(hostname);
 
                 secureDataStream.AuthenticateAsServer(certificate,
                     false, SslProtocols.Default, false);

@@ -1,23 +1,31 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Diagnostics;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+
+using Org.BouncyCastle.X509;
+using Org.BouncyCastle.Math;
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Pkcs;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Security;
+using Org.BouncyCastle.Utilities;
+using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Asn1.Pkcs;
+using Org.BouncyCastle.Crypto.Prng;
+using Org.BouncyCastle.Crypto.Operators;
+using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Parameters;
 
 namespace Eavesdrop
 {
     /// <summary>
     /// Represents a manager for creating/destroying self-signed certificates.
     /// </summary>
-    public class Certifier : IDisposable
+    public class Certifier
     {
-        private const string CERT_CREATE_FORMAT =
-            "-ss {0} -n \"CN={1}, O={2}\" -sky {3} -cy {4} -m 120 -a sha256 -eku 1.3.6.1.5.5.7.3.1 {5}";
-
-        private readonly Process _certCreateProcess;
+        private AsymmetricKeyParameter _privKey;
         private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
         public string Issuer { get; }
@@ -25,44 +33,30 @@ namespace Eavesdrop
 
         public X509Store MyStore { get; }
         public X509Store RootStore { get; }
-        public FileInfo MakeCertInfo { get; }
-
-        public bool IsDisposed { get; private set; }
 
         public Certifier(string issuer, string rootCertificateName)
         {
-            string currentDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            MakeCertInfo = new FileInfo(Path.Combine(currentDirectory, "makecert.exe"));
-            
-            _certCreateProcess = new Process();
-            _certCreateProcess.StartInfo.Verb = "runas";
-            _certCreateProcess.StartInfo.CreateNoWindow = true;
-            _certCreateProcess.StartInfo.UseShellExecute = false;
-            _certCreateProcess.StartInfo.FileName = MakeCertInfo.FullName;
             _certificateCache = new Dictionary<string, X509Certificate2>();
 
             Issuer = issuer;
             RootCertificateName = rootCertificateName;
-            
+
             MyStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
             RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
         }
 
         public bool CreateTrustedRootCertificate()
         {
-            X509Certificate2 rootCertificate =
-                CreateCertificate(RootStore, RootCertificateName);
-
-            return rootCertificate != null;
+            return (InstallCertificate(RootStore, RootCertificateName) != null);
         }
         public bool DestroyTrustedRootCertificate()
         {
-            return DestroyCertificate(RootStore, RootCertificateName);
+            return DestroyCertificates(RootStore);
         }
         public bool ExportTrustedRootCertificate(string path)
         {
             X509Certificate2 rootCertificate =
-                CreateCertificate(RootStore, RootCertificateName);
+                InstallCertificate(RootStore, RootCertificateName);
 
             path = Path.GetFullPath(path);
             if (rootCertificate != null)
@@ -73,210 +67,165 @@ namespace Eavesdrop
             return File.Exists(path);
         }
 
-        public X509Certificate2Collection FindCertificates(string certificateSubject)
+        public X509Certificate2Collection FindCertificates(string subjectName)
         {
-            return FindCertificates(MyStore, certificateSubject);
+            return FindCertificates(MyStore, subjectName);
         }
-        protected virtual X509Certificate2Collection FindCertificates(X509Store store, string certificateSubject)
+        protected virtual X509Certificate2Collection FindCertificates(X509Store store, string subjectName)
         {
-            X509Certificate2Collection discoveredCertificates = store.Certificates
-                .Find(X509FindType.FindBySubjectDistinguishedName, certificateSubject, false);
+            X509Certificate2Collection certificates = store.Certificates
+                .Find(X509FindType.FindBySubjectDistinguishedName, subjectName, false);
 
-            return discoveredCertificates.Count > 0 ?
-                discoveredCertificates : null;
+            return (certificates.Count > 0 ? certificates : null);
         }
 
-        public X509Certificate2 CreateCertificate(string certificateName)
+        public X509Certificate2 GenerateCertificate(string certificateName)
         {
-            return CreateCertificate(MyStore, certificateName);
+            return InstallCertificate(MyStore, certificateName);
         }
-        protected virtual X509Certificate2 CreateCertificate(X509Store store, string certificateName)
+        protected virtual X509Certificate2 InstallCertificate(X509Store store, string certificateName)
         {
-            if (_certificateCache.ContainsKey(certificateName))
-                return _certificateCache[certificateName];
-
+            X509Certificate2 certificate = null;
+            if (_certificateCache.TryGetValue(certificateName, out certificate))
+            {
+                return certificate;
+            }
             lock (store)
             {
-                X509Certificate2 certificate = null;
                 try
                 {
                     store.Open(OpenFlags.ReadWrite);
-                    string certificateSubject = $"CN={certificateName}, O={Issuer}";
+                    string subjectName = $"CN={certificateName}, O={Issuer}";
 
-                    X509Certificate2Collection certificates =
-                        FindCertificates(store, certificateSubject);
-
-                    if (certificates != null)
-                        certificate = certificates[0];
-
+                    certificate = FindCertificates(store, subjectName)?[0];
                     if (certificate == null)
                     {
-                        string[] args = new[] {
-                            GetCertificateCreateArgs(store, certificateName) };
-
-                        CreateCertificate(args);
-                        certificates = FindCertificates(store, certificateSubject);
-
-                        if (certificates != null)
-                            certificate = certificates[0];
+                        certificate = CreateCertificate(subjectName, (store == RootStore), certificateName);
+                        if (certificate != null)
+                        {
+                            store.Add(certificate);
+                        }
                     }
                     return certificate;
                 }
                 finally
                 {
                     store.Close();
-
                     if (certificate != null && !_certificateCache.ContainsKey(certificateName))
+                    {
                         _certificateCache.Add(certificateName, certificate);
+                    }
                 }
             }
         }
-
-        public bool DestroyCertificate(string certificateName)
+        protected virtual X509Certificate2 CreateCertificate(string subjectName, bool isCertificateAuthority, string altName)
         {
-            return DestroyCertificate(MyStore, certificateName);
+            // Generating Random Numbers
+            var randomGenerator = new CryptoApiRandomGenerator();
+            SecureRandom random = new SecureRandom(randomGenerator);
+
+            // The Certificate Generator
+            var certificateGenerator = new X509V3CertificateGenerator();
+            if (!isCertificateAuthority)
+            {
+                certificateGenerator.AddExtension(X509Extensions.ExtendedKeyUsage.Id, true, new ExtendedKeyUsage(KeyPurposeID.IdKPServerAuth));
+            }
+
+            // Serial Number
+            BigInteger serialNumber = BigIntegers.CreateRandomInRange(BigInteger.One, BigInteger.ValueOf(Int64.MaxValue), random);
+            certificateGenerator.SetSerialNumber(serialNumber);
+
+            // Issuer and Subject Name
+            var subjectDN = new X509Name(true, subjectName);
+            certificateGenerator.SetSubjectDN(subjectDN);
+            certificateGenerator.SetIssuerDN(isCertificateAuthority ? subjectDN : new X509Name(true, $"CN={RootCertificateName}, O={Issuer}"));
+
+            if (!isCertificateAuthority)
+            {
+                var subjectAltName = new GeneralNames(new GeneralName(GeneralName.DnsName, altName));
+                certificateGenerator.AddExtension(X509Extensions.SubjectAlternativeName, false, subjectAltName);
+            }
+
+            // Valid For
+            DateTime notBefore = DateTime.UtcNow.Date;
+            DateTime notAfter = notBefore.AddYears(20);
+
+            certificateGenerator.SetNotBefore(notBefore);
+            certificateGenerator.SetNotAfter(notAfter);
+
+            // Subject Public Key
+            var keyGenerationParameters = new KeyGenerationParameters(random, 1024);
+            var keyPairGenerator = new RsaKeyPairGenerator();
+            keyPairGenerator.Init(keyGenerationParameters);
+
+            AsymmetricCipherKeyPair subjectKeyPair = keyPairGenerator.GenerateKeyPair();
+            certificateGenerator.SetPublicKey(subjectKeyPair.Public);
+
+            AsymmetricKeyParameter issuerPrivKey = null;
+            if (isCertificateAuthority)
+            {
+                issuerPrivKey = subjectKeyPair.Private;
+                _privKey = issuerPrivKey;
+            }
+            else
+            {
+                X509Certificate2 rootCA = InstallCertificate(RootStore, RootCertificateName);
+                issuerPrivKey = _privKey;
+            }
+
+            // selfsign certificate
+            ISignatureFactory signatureFactory = new Asn1SignatureFactory("SHA256WITHRSA", issuerPrivKey, random);
+            Org.BouncyCastle.X509.X509Certificate certificate = certificateGenerator.Generate(signatureFactory);
+
+            // merge into X509Certificate2
+            var x509 = new X509Certificate2(certificate.GetEncoded());
+            if (isCertificateAuthority)
+            {
+                x509.PrivateKey = DotNetUtilities.ToRSA((RsaPrivateCrtKeyParameters)issuerPrivKey);
+            }
+            else
+            {
+                // correcponding private key
+                PrivateKeyInfo info = PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
+                var seq = (Asn1Sequence)Asn1Object.FromByteArray(info.ParsePrivateKey().GetDerEncoded());
+                var rsa = RsaPrivateKeyStructure.GetInstance(seq);
+
+                var rsaparams = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent,
+                    rsa.PrivateExponent, rsa.Prime1, rsa.Prime2, rsa.Exponent1, rsa.Exponent2, rsa.Coefficient);
+
+                x509.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
+            }
+            return x509;
         }
-        protected virtual bool DestroyCertificate(X509Store store, string certificateName)
+
+        public void DestroyCertificates()
+        {
+            DestroyCertificates(MyStore);
+            DestroyCertificates(RootStore);
+        }
+        public bool DestroyCertificates(X509Store store)
         {
             lock (store)
             {
-                X509Certificate2Collection certificates = null;
                 try
                 {
                     store.Open(OpenFlags.ReadWrite);
-                    string certificateSubject = string.Format("CN={0}, O={1}", certificateName, Issuer);
+                    X509Certificate2Collection certificates = store.Certificates.Find(X509FindType.FindByIssuerName, Issuer, false);
 
-                    certificates = FindCertificates(store, certificateSubject);
-                    if (certificates != null)
+                    store.RemoveRange(certificates);
+                    IEnumerable<string> subjectNames = certificates
+                        .Cast<X509Certificate2>().Select(c => c.GetNameInfo(X509NameType.SimpleName, false));
+
+                    foreach (string subjectName in subjectNames)
                     {
-                        store.RemoveRange(certificates);
-                        certificates = FindCertificates(store, certificateSubject);
+                        if (!_certificateCache.ContainsKey(subjectName)) continue;
+                        _certificateCache.Remove(subjectName);
                     }
-                    return certificates == null;
+                    return true;
                 }
-                catch (CryptographicException) { /* Certificate removal failed. */ return false; }
-                finally
-                {
-                    store.Close();
-
-                    if (certificates == null &&
-                        _certificateCache.ContainsKey(certificateName))
-                    {
-                        _certificateCache.Remove(certificateName);
-                    }
-                }
+                catch { return false; }
+                finally { store.Close(); }
             }
-        }
-
-        public bool DestroySignedCertificates()
-        {
-            var myCertificates = new X509Certificate2Collection();
-            var rootCertificates = new X509Certificate2Collection();
-            try
-            {
-                lock (MyStore)
-                {
-                    MyStore.Open(OpenFlags.ReadWrite);
-
-                    var myStoreCertificates = MyStore.Certificates
-                        .Find(X509FindType.FindByIssuerName, Issuer, false);
-
-                    myCertificates.AddRange(myStoreCertificates);
-                }
-                lock (RootStore)
-                {
-                    RootStore.Open(OpenFlags.ReadWrite);
-
-                    var myRootCertificates = RootStore.Certificates
-                        .Find(X509FindType.FindByIssuerName, Issuer, false);
-
-                    rootCertificates.AddRange(myRootCertificates);
-                }
-                return DestroySignedCertificates(myCertificates, rootCertificates);
-            }
-            finally
-            {
-                MyStore.Close();
-                RootStore.Close();
-            }
-        }
-        protected virtual bool DestroySignedCertificates(
-            X509Certificate2Collection myCertificates, X509Certificate2Collection rootCertificates)
-        {
-            try
-            {
-                var certificateNames = new List<string>();
-                if (MyStore != null)
-                {
-                    MyStore.RemoveRange(myCertificates);
-
-                    IEnumerable<string> myCertNames = myCertificates.Cast<X509Certificate2>()
-                        .Select(c => c.GetNameInfo(X509NameType.SimpleName, false));
-
-                    certificateNames.AddRange(myCertNames);
-                }
-
-                if (RootStore != null)
-                {
-                    RootStore.RemoveRange(rootCertificates);
-
-                    IEnumerable<string> rootCertNames = rootCertificates.Cast<X509Certificate2>()
-                        .Select(c => c.GetNameInfo(X509NameType.SimpleName, false));
-
-                    certificateNames.AddRange(rootCertNames);
-                }
-
-                foreach (string certificateName in certificateNames)
-                {
-                    if (_certificateCache.ContainsKey(certificateName))
-                        _certificateCache.Remove(certificateName);
-                }
-
-                return true;
-            }
-            catch (CryptographicException) { return false; }
-        }
-
-        protected virtual void CreateCertificate(string[] args)
-        {
-            lock (_certCreateProcess)
-            {
-                if (!File.Exists(MakeCertInfo.FullName))
-                    throw new Exception($"Unable to locate '{MakeCertInfo.Name}'.");
-
-                _certCreateProcess.StartInfo.Arguments =
-                    (args != null ? args[0] : string.Empty);
-
-                _certCreateProcess.Start();
-                _certCreateProcess.WaitForExit();
-            }
-        }
-        protected virtual string GetCertificateCreateArgs(X509Store store, string certificateName)
-        {
-            bool isRootCertificate =
-                (certificateName == RootCertificateName);
-
-            string certCreatArgs = string.Format(CERT_CREATE_FORMAT,
-                store.Name, certificateName, Issuer,
-                isRootCertificate ? "signature" : "exchange",
-                isRootCertificate ? "authority" : "end",
-                isRootCertificate ? "-h 1 -r" : $"-pe -in \"{RootCertificateName}\" -is root");
-
-            return certCreatArgs;
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-        }
-        protected virtual void Dispose(bool disposing)
-        {
-            if (IsDisposed) return;
-            if (disposing)
-            {
-                _certCreateProcess.Dispose();
-            }
-            IsDisposed = true;
         }
     }
 }
