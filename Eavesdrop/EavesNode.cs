@@ -205,23 +205,20 @@ namespace Eavesdrop
             SslStream secureDataStream = null;
             try
             {
-                secureDataStream =
-                    new SslStream(DataStream, false);
-
-                X509Certificate2 certificate =
-                    Certifier.GenerateCertificate(hostname);
-
-                secureDataStream.AuthenticateAsServer(certificate,
-                    false, SslProtocols.Default, false);
+                secureDataStream = new SslStream(DataStream, false);
+                X509Certificate2 certificate = Certifier.GenerateCertificate(hostname);
+                secureDataStream.AuthenticateAsServer(certificate, false, SslProtocols.Default, false);
             }
-            catch (Exception ex) when (ex is IOException || ex is CryptographicException)
+            catch (Exception)
             {
                 secureDataStream = null;
             }
             finally
             {
                 if (secureDataStream != null)
+                {
                     DataStream = secureDataStream;
+                }
             }
             return (IsSecure = (secureDataStream == DataStream));
         }

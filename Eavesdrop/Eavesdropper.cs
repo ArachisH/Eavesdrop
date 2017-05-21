@@ -52,6 +52,9 @@ namespace Eavesdrop
         {
             _thisStaticObjectLock = new object();
 
+            ServicePointManager.Expect100Continue = true;
+            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
+
             Certifier = new Certifier("Eavesdrop",
                 "Eavesdrop Root Certificate Authority");
         }
