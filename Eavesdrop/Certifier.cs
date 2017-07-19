@@ -109,6 +109,7 @@ namespace Eavesdrop
                     }
                     return certificate;
                 }
+                catch { return (certificate = null); }
                 finally
                 {
                     store.Close();
