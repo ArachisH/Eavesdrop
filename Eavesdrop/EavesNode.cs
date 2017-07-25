@@ -76,8 +76,11 @@ namespace Eavesdrop
             {
                 SendWebResponse($"HTTP/1.0 200 OK\r\n\r\n");
 
-                if (SecureTunnel(request.Host))
-                    request = ReceiveWebRequest(request.RequestUri.OriginalString);
+                if (!SecureTunnel(request.Host))
+                {
+                    return null;
+                }
+                request = ReceiveWebRequest(request.RequestUri.OriginalString);
             }
             return request;
         }
@@ -149,7 +152,9 @@ namespace Eavesdrop
             try
             {
                 if (data != null && Client.Connected)
+                {
                     DataStream.Write(data, 0, data.Length);
+                }
             }
             catch (IOException) { }
         }
@@ -199,20 +204,17 @@ namespace Eavesdrop
             SendWebResponse(responseBody);
         }
 
-        public bool SecureTunnel(string hostname)
+        public bool SecureTunnel(string host)
         {
-            hostname = hostname.Split(':')[0];
+            host = host.Split(':')[0];
             SslStream secureDataStream = null;
             try
             {
                 secureDataStream = new SslStream(DataStream, false);
-                X509Certificate2 certificate = Certifier.GenerateCertificate(hostname);
+                X509Certificate2 certificate = Certifier.GenerateCertificate(host);
                 secureDataStream.AuthenticateAsServer(certificate, false, SslProtocols.Default, false);
             }
-            catch (Exception)
-            {
-                secureDataStream = null;
-            }
+            catch { secureDataStream = null; }
             finally
             {
                 if (secureDataStream != null)
