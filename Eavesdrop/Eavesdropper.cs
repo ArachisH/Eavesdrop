@@ -21,13 +21,13 @@ namespace Eavesdrop
         public static event AsyncEventHandler<RequestInterceptedEventArgs> RequestInterceptedAsync;
         private static Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e)
         {
-            return OnInterceptedAsync(RequestInterceptedAsync, e);
+            return RequestInterceptedAsync(null, e);
         }
 
         public static event AsyncEventHandler<ResponseInterceptedEventArgs> ResponseInterceptedAsync;
         private static Task OnResponseInterceptedAsync(ResponseInterceptedEventArgs e)
         {
-            return OnInterceptedAsync(ResponseInterceptedAsync, e);
+            return ResponseInterceptedAsync(null, e);
         }
 
 
@@ -208,16 +208,6 @@ namespace Eavesdrop
             INETOptions.IsIgnoringLocalTraffic = true;
 
             INETOptions.Save();
-        }
-
-        private static async Task OnInterceptedAsync<TEventArgs>(AsyncEventHandler<TEventArgs> handler, TEventArgs e)
-        {
-            if (handler == null) return;
-            Delegate[] invocations = handler.GetInvocationList();
-            foreach (AsyncEventHandler<TEventArgs> invocation in invocations)
-            {
-                await invocation(null, e);
-            }
         }
     }
 }

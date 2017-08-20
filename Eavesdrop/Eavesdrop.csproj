@@ -47,7 +47,6 @@
   <ItemGroup>
     <Compile Include="CertificateManager.cs" />
     <Compile Include="Eavesdropper.cs" />
-    <Compile Include="Event Args\InterceptedEventArgs.cs" />
     <Compile Include="Interceptors.cs" />
     <Compile Include="Internals\INETOptions.cs" />
     <Compile Include="Internals\NativeMethods.cs" />
