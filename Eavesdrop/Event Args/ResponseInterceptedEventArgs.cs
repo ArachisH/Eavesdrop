@@ -1,13 +1,15 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.ComponentModel;
 using System.Threading.Tasks;
 
 using Eavesdrop.Network;
 
 namespace Eavesdrop
 {
-    public class ResponseInterceptedEventArgs : InterceptedEventArgs
+    public class ResponseInterceptedEventArgs : CancelEventArgs
     {
         private HttpWebResponse _httpResponse;
 
@@ -22,17 +24,17 @@ namespace Eavesdrop
                 _httpResponse = (value as HttpWebResponse);
                 if (_httpResponse != null)
                 {
-                    _cookieContainer = new CookieContainer();
+                    CookieContainer = new CookieContainer();
                     CookieContainer.Add(_httpResponse.Cookies);
                 }
-                else _cookieContainer = null;
+                else CookieContainer = null;
             }
         }
 
         public Uri Uri => Response?.ResponseUri;
 
-        private CookieContainer _cookieContainer;
-        public override CookieContainer CookieContainer => _cookieContainer;
+        public HttpContent Content { get; set; }
+        public CookieContainer CookieContainer { get; private set; }
 
         public string ContentType
         {

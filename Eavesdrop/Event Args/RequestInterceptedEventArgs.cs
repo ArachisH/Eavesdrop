@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Net;
+using System.ComponentModel;
+using System.Net.Http;
 
 namespace Eavesdrop
 {
-    public class RequestInterceptedEventArgs : InterceptedEventArgs
+    public class RequestInterceptedEventArgs : CancelEventArgs
     {
         private HttpWebRequest _httpRequest;
+
+        public HttpContent Content { get; set; }
 
         private WebRequest _request;
         public WebRequest Request
@@ -19,7 +23,7 @@ namespace Eavesdrop
         }
 
         public Uri Uri => Request?.RequestUri;
-        public override CookieContainer CookieContainer => _httpRequest?.CookieContainer;
+        public CookieContainer CookieContainer => _httpRequest?.CookieContainer;
 
         public string Method
         {
