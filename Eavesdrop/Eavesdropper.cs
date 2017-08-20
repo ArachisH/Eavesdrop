@@ -21,13 +21,13 @@ namespace Eavesdrop
         public static event AsyncEventHandler<RequestInterceptedEventArgs> RequestInterceptedAsync;
         private static Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e)
         {
-            return RequestInterceptedAsync(null, e);
+            return (RequestInterceptedAsync?.Invoke(null, e) ?? Task.CompletedTask);
         }
 
         public static event AsyncEventHandler<ResponseInterceptedEventArgs> ResponseInterceptedAsync;
         private static Task OnResponseInterceptedAsync(ResponseInterceptedEventArgs e)
         {
-            return ResponseInterceptedAsync(null, e);
+            return (ResponseInterceptedAsync?.Invoke(null, e) ?? Task.CompletedTask);
         }
 
 
