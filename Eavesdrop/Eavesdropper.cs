@@ -214,8 +214,6 @@ namespace Eavesdrop
         {
             if (handler == null) return;
             Delegate[] invocations = handler.GetInvocationList();
-
-            var interceptedTasks = new List<Task>(invocations.Length);
             foreach (AsyncEventHandler<TEventArgs> invocation in invocations)
             {
                 await invocation(null, e);
