@@ -21,21 +21,19 @@ using Org.BouncyCastle.Crypto.Parameters;
 
 namespace Eavesdrop
 {
-    /// <summary>
-    /// Represents a manager for creating/destroying self-signed certificates.
-    /// </summary>
-    public class Certifier
+    public class CertificateManager
     {
         private AsymmetricKeyParameter _privKey;
         private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
         public string Issuer { get; }
         public string RootCertificateName { get; }
+        public bool IsStoringPersonalCertificates { get; set; }
 
         public X509Store MyStore { get; }
         public X509Store RootStore { get; }
 
-        public Certifier(string issuer, string rootCertificateName)
+        public CertificateManager(string issuer, string rootCertificateName)
         {
             _certificateCache = new Dictionary<string, X509Certificate2>();
 
@@ -86,8 +84,7 @@ namespace Eavesdrop
         }
         protected virtual X509Certificate2 InstallCertificate(X509Store store, string certificateName)
         {
-            X509Certificate2 certificate = null;
-            if (_certificateCache.TryGetValue(certificateName, out certificate))
+            if (_certificateCache.TryGetValue(certificateName, out X509Certificate2 certificate))
             {
                 return certificate;
             }
@@ -104,7 +101,10 @@ namespace Eavesdrop
                         certificate = CreateCertificate(subjectName, (store == RootStore), certificateName);
                         if (certificate != null)
                         {
-                            store.Add(certificate);
+                            if (store == RootStore || IsStoringPersonalCertificates)
+                            {
+                                store.Add(certificate);
+                            }
                         }
                     }
                     return certificate;

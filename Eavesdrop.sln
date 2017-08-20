@@ -1,11 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.26430.16
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eavesdrop", "Eavesdrop\Eavesdrop.csproj", "{CED1943A-E9B4-46B6-A887-54BCB0DD406B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eavesdrop", "Eavesdrop\Eavesdrop.csproj", "{DE239471-7950-4049-9B92-3C1A4C4CA063}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eavesdrop.Example", "Eavesdrop.Example\Eavesdrop.Example.csproj", "{49B7845F-8D3A-4915-B8E0-6EAFCC929571}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eavesdrop.Sandbox", "Eavesdrop.Sandbox\Eavesdrop.Sandbox.csproj", "{A4CE85C3-5DA1-4F45-AAE1-E8EA389C6F26}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,14 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{CED1943A-E9B4-46B6-A887-54BCB0DD406B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CED1943A-E9B4-46B6-A887-54BCB0DD406B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CED1943A-E9B4-46B6-A887-54BCB0DD406B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CED1943A-E9B4-46B6-A887-54BCB0DD406B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{49B7845F-8D3A-4915-B8E0-6EAFCC929571}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{49B7845F-8D3A-4915-B8E0-6EAFCC929571}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{49B7845F-8D3A-4915-B8E0-6EAFCC929571}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{49B7845F-8D3A-4915-B8E0-6EAFCC929571}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DE239471-7950-4049-9B92-3C1A4C4CA063}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DE239471-7950-4049-9B92-3C1A4C4CA063}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DE239471-7950-4049-9B92-3C1A4C4CA063}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DE239471-7950-4049-9B92-3C1A4C4CA063}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4CE85C3-5DA1-4F45-AAE1-E8EA389C6F26}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4CE85C3-5DA1-4F45-AAE1-E8EA389C6F26}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4CE85C3-5DA1-4F45-AAE1-E8EA389C6F26}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4CE85C3-5DA1-4F45-AAE1-E8EA389C6F26}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
