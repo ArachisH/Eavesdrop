@@ -30,7 +30,6 @@ namespace Eavesdrop
             return (ResponseInterceptedAsync?.Invoke(null, e) ?? Task.CompletedTask);
         }
 
-
         public static List<string> Overrides { get; }
         public static CertificateManager Certifier { get; }
 
@@ -157,18 +156,14 @@ namespace Eavesdrop
                     }
 
                     await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
-                    response = responseArgs.Response;
-
                     if (responseArgs.Cancel) return;
-                    await local.SendResponseAsync(response, responseContent).ConfigureAwait(false);
+
+                    await local.SendResponseAsync(responseArgs.Response, responseArgs.Content).ConfigureAwait(false);
                 }
                 finally
                 {
                     response.Dispose();
-                    if (response != responseArgs.Response)
-                    {
-                        responseArgs.Response.Dispose();
-                    }
+                    responseArgs.Response.Dispose();
 
                     responseContent?.Dispose();
                     responseArgs.Content?.Dispose();
