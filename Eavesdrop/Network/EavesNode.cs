@@ -78,7 +78,7 @@ namespace Eavesdrop.Network
 
         public Task SendResponseAsync(WebResponse response, HttpContent content)
         {
-            var status = ((response as HttpWebResponse)?.StatusCode ?? HttpStatusCode.OK);
+            HttpStatusCode status = ((response as HttpWebResponse)?.StatusCode ?? HttpStatusCode.OK);
             return SendResponseAsync(status, response.Headers, content);
         }
         public Task SendResponseAsync(HttpStatusCode status)
@@ -148,7 +148,7 @@ namespace Eavesdrop.Network
 
         private string ReadNonBufferedLine()
         {
-            var line = string.Empty;
+            string line = string.Empty;
             try
             {
                 using (var binaryInput = new BinaryReader(GetStream(), Encoding.UTF8, true))
@@ -188,7 +188,7 @@ namespace Eavesdrop.Network
         }
         private HttpWebRequest CreateRequest(string method, List<string> headers, Uri requestUri)
         {
-            var request = WebRequest.CreateHttp(requestUri);
+            HttpWebRequest request = WebRequest.CreateHttp(requestUri);
             request.AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate);
             request.ProtocolVersion = HttpVersion.Version10;
             request.CookieContainer = new CookieContainer();
@@ -260,7 +260,7 @@ namespace Eavesdrop.Network
         {
             if (disposing)
             {
-                GetStream().Dispose();
+                GetStream().Close();
                 _client.Close();
             }
         }

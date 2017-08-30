@@ -21,7 +21,7 @@ using Org.BouncyCastle.Crypto.Parameters;
 
 namespace Eavesdrop
 {
-    public class CertificateManager
+    public class CertificateManager : IDisposable
     {
         private AsymmetricKeyParameter _privKey;
         private readonly IDictionary<string, X509Certificate2> _certificateCache;
@@ -124,7 +124,7 @@ namespace Eavesdrop
         {
             // Generating Random Numbers
             var randomGenerator = new CryptoApiRandomGenerator();
-            SecureRandom random = new SecureRandom(randomGenerator);
+            var random = new SecureRandom(randomGenerator);
 
             // The Certificate Generator
             var certificateGenerator = new X509V3CertificateGenerator();
@@ -251,6 +251,19 @@ namespace Eavesdrop
                 }
                 catch { return false; }
                 finally { store.Close(); }
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                MyStore.Dispose();
+                RootStore.Dispose();
             }
         }
     }
