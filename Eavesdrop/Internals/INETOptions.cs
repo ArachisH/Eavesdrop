@@ -21,8 +21,7 @@ namespace Eavesdrop
         static INETOptions()
         {
             _stateLock = new object();
-            _proxyKey = Registry.CurrentUser.OpenSubKey(
-                "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", true);
+            _proxyKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings", true);
 
             Overrides = new List<string>();
             Load();

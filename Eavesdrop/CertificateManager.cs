@@ -262,8 +262,8 @@ namespace Eavesdrop
         {
             if (disposing)
             {
-                MyStore.Dispose();
-                RootStore.Dispose();
+                MyStore.Close();
+                RootStore.Close();
             }
         }
     }

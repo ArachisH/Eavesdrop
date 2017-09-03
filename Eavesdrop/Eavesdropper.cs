@@ -19,15 +19,23 @@ namespace Eavesdrop
         public delegate Task AsyncEventHandler<TEventArgs>(object sender, TEventArgs e);
 
         public static event AsyncEventHandler<RequestInterceptedEventArgs> RequestInterceptedAsync;
-        private static Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e)
+        private static async Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e)
         {
-            return (RequestInterceptedAsync?.Invoke(null, e) ?? Task.CompletedTask);
+            Task interceptedTask = RequestInterceptedAsync?.Invoke(null, e);
+            if (interceptedTask != null)
+            {
+                await interceptedTask;
+            }
         }
 
         public static event AsyncEventHandler<ResponseInterceptedEventArgs> ResponseInterceptedAsync;
-        private static Task OnResponseInterceptedAsync(ResponseInterceptedEventArgs e)
+        private static async Task OnResponseInterceptedAsync(ResponseInterceptedEventArgs e)
         {
-            return (ResponseInterceptedAsync?.Invoke(null, e) ?? Task.CompletedTask);
+            Task interceptedTask = ResponseInterceptedAsync?.Invoke(null, e);
+            if (interceptedTask != null)
+            {
+                await interceptedTask;
+            }
         }
 
         public static List<string> Overrides { get; }
