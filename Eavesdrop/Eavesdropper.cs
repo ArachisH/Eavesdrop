@@ -127,12 +127,14 @@ namespace Eavesdrop
                     request = requestArgs.Request;
 
                     if (requestArgs.Cancel) return;
-                    if (requestContent != null)
+                    if (requestArgs.Content != null)
                     {
-                        using (requestContent)
+                        request.ContentLength = (long)requestArgs.Content.Headers.ContentLength;
+
+                        using (requestArgs.Content)
                         using (Stream requestOutput = await request.GetRequestStreamAsync().ConfigureAwait(false))
                         {
-                            await requestContent.CopyToAsync(requestOutput).ConfigureAwait(false);
+                            await requestArgs.Content.CopyToAsync(requestOutput).ConfigureAwait(false);
                         }
                     }
                 }
