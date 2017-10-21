@@ -82,9 +82,15 @@ namespace Eavesdrop
             foreach (string value in values)
             {
                 string[] pair = value.Split('=');
-                string protocol = pair[0];
-                string address = pair[1];
+                if (pair.Length != 2)
+                {
+                    HTTPAddress = value;
+                    HTTPSAddress = value;
+                    return;
+                }
 
+                string address = pair[1];
+                string protocol = pair[0];
                 switch (protocol)
                 {
                     case "http": HTTPAddress = address; break;
