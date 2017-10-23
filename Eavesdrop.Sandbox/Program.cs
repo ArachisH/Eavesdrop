@@ -24,9 +24,7 @@ namespace Eavesdrop.Sandbox
 
             Console.ReadLine();
             Eavesdropper.Terminate();
-
             Console.WriteLine("Eavesdropper has been terminated! | " + DateTime.Now);
-            Console.ReadLine();
         }
 
         private Task RequestInterceptedAsync(object sender, RequestInterceptedEventArgs e)
