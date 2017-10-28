@@ -64,7 +64,7 @@ namespace Eavesdrop
                 IntPtr optionsPtr = Marshal.AllocCoTaskMem(_iNetOptionSize * options.Count);
                 for (int i = 0; i < options.Count; ++i)
                 {
-                    var optionPtr = new IntPtr(optionsPtr.ToInt32() + (i * _iNetOptionSize));
+                    var optionPtr = new IntPtr((IntPtr.Size == 4 ? optionsPtr.ToInt32() : optionsPtr.ToInt64()) + (i * _iNetOptionSize));
                     Marshal.StructureToPtr(options[i], optionPtr, false);
                 }
                 inetPackage._optionsPtr = optionsPtr;
