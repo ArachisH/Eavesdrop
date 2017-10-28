@@ -31,6 +31,7 @@ namespace Eavesdrop
             }
         }
 
+        public WebRequest Request { get; }
         public Uri Uri => Response?.ResponseUri;
 
         public HttpContent Content { get; set; }
@@ -60,8 +61,9 @@ namespace Eavesdrop
             }
         }
 
-        public ResponseInterceptedEventArgs(WebResponse response)
+        public ResponseInterceptedEventArgs(WebRequest request, WebResponse response)
         {
+            Request = request;
             Response = response;
         }
 

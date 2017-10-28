@@ -156,7 +156,7 @@ namespace Eavesdrop
 
                 if (response == null) return;
                 HttpContent responseContent = null;
-                var responseArgs = new ResponseInterceptedEventArgs(response);
+                var responseArgs = new ResponseInterceptedEventArgs(request, response);
                 try
                 {
                     using (Stream responseInput = response.GetResponseStream())
