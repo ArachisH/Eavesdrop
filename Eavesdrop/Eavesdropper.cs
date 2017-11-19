@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 
 using Eavesdrop.Network;
+using System.Runtime.InteropServices;
 
 namespace Eavesdrop
 {
@@ -183,6 +184,8 @@ namespace Eavesdrop
 
         private static void ResetMachineProxy()
         {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+
             INETOptions.Overrides.Clear();
             INETOptions.IsIgnoringLocalTraffic = false;
 
@@ -194,6 +197,8 @@ namespace Eavesdrop
         }
         private static void SetMachineProxy(int port, Interceptors interceptors)
         {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+
             foreach (string @override in Overrides)
             {
                 if (INETOptions.Overrides.Contains(@override)) continue;
