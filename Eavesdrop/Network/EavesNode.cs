@@ -131,7 +131,7 @@ namespace Eavesdrop.Network
             {
                 Buffer.BlockCopy(payload, 0, responseData, headerData.Length, payload.Length);
             }
-            GetStream().Write(responseData, 0, responseData.Length);
+            await GetStream().WriteAsync(responseData, 0, responseData.Length).ConfigureAwait(false);
         }
 
         public Stream GetStream()
