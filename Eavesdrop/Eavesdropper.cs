@@ -48,7 +48,7 @@ namespace Eavesdrop
             _stateLock = new object();
 
             ServicePointManager.Expect100Continue = true;
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
 
             Overrides = new List<string>();
             Certifier = new CertificateManager("Eavesdrop", "Eavesdrop Root Certificate Authority");

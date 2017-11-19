@@ -78,59 +78,60 @@ namespace Eavesdrop.Network
 
         public Task SendResponseAsync(WebResponse response, HttpContent content)
         {
-            HttpStatusCode status = ((response as HttpWebResponse)?.StatusCode ?? HttpStatusCode.OK);
-            return SendResponseAsync(status, response.Headers, content);
+            string description = "OK";
+            var status = HttpStatusCode.OK;
+            if (response is HttpWebResponse httpResponse)
+            {
+                status = httpResponse.StatusCode;
+                description = httpResponse.StatusDescription;
+            }
+            return SendResponseAsync(status, description, response.Headers, content);
         }
-        public Task SendResponseAsync(HttpStatusCode status)
+        public Task SendResponseAsync(HttpStatusCode status, string description = null)
         {
-            return SendResponseAsync(status, null, null);
+            return SendResponseAsync(status, (description ?? status.ToString()), null, null);
         }
-        public Task SendResponseAsync(HttpStatusCode status, WebHeaderCollection headers)
+        public async Task SendResponseAsync(HttpStatusCode status, string description, WebHeaderCollection headers, HttpContent content)
         {
-            return SendResponseAsync(status, headers, null);
-        }
-        public async Task SendResponseAsync(HttpStatusCode status, WebHeaderCollection headers, HttpContent content)
-        {
-            string description = HttpWorkerRequest.GetStatusDescription((int)status);
-            string command = $"HTTP/{HttpVersion.Version10} {(int)status} {description}";
-
             byte[] payload = null;
             if (content != null)
             {
                 payload = await content.ReadAsByteArrayAsync().ConfigureAwait(false);
             }
 
-            using (StreamWriter output = WrapStreamWriter())
+            var headerBuilder = new StringBuilder();
+            headerBuilder.AppendLine($"HTTP/{HttpVersion.Version10} {(int)status} {description}");
+            if (headers != null)
             {
-                await output.WriteLineAsync(command).ConfigureAwait(false);
-                if (headers != null)
+                foreach (string header in headers.AllKeys)
                 {
-                    foreach (string header in headers.AllKeys)
+                    string value = headers[header];
+                    if (header.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
                     {
-                        string value = headers[header];
-                        if (header.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
-                        {
-                            value = (payload?.Length.ToString() ?? "0");
-                        }
-                        if (header.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
-                        {
-                            foreach (string setCookie in _responseCookieSplitter.Split(value))
-                            {
-                                await output.WriteLineAsync($"{header}: {setCookie}").ConfigureAwait(false);
-                            }
-                        }
-                        else await output.WriteLineAsync($"{header}: {value}").ConfigureAwait(false);
+                        value = (payload?.Length.ToString() ?? "0");
                     }
+                    if (header.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (string setCookie in _responseCookieSplitter.Split(value))
+                        {
+                            headerBuilder.AppendLine($"{header}: {setCookie}");
+                        }
+                    }
+                    else headerBuilder.AppendLine($"{header}: {value}");
                 }
-                if (payload != null)
-                {
-                    await output.WriteLineAsync().ConfigureAwait(false);
-                    await output.FlushAsync().ConfigureAwait(false);
-
-                    await output.BaseStream.WriteAsync(payload, 0, payload.Length).ConfigureAwait(false);
-                }
-                await output.WriteLineAsync().ConfigureAwait(false);
             }
+            headerBuilder.AppendLine();
+
+            int payloadSize = (payload?.Length ?? 0);
+            byte[] headerData = Encoding.UTF8.GetBytes(headerBuilder.ToString());
+            byte[] responseData = new byte[headerData.Length + payloadSize];
+
+            Buffer.BlockCopy(headerData, 0, responseData, 0, headerData.Length);
+            if (payloadSize > 0)
+            {
+                Buffer.BlockCopy(payload, 0, responseData, headerData.Length, payload.Length);
+            }
+            GetStream().Write(responseData, 0, responseData.Length);
         }
 
         public Stream GetStream()
@@ -167,7 +168,7 @@ namespace Eavesdrop.Network
                 X509Certificate2 certificate = _certifier.GenerateCertificate(host);
 
                 _secureStream = new SslStream(GetStream());
-                _secureStream.AuthenticateAsServer(certificate, false, SslProtocols.Default, false);
+                _secureStream.AuthenticateAsServer(certificate, false, SslProtocols.Tls12 | SslProtocols.Tls11 | SslProtocols.Tls, false);
 
                 return true;
             }

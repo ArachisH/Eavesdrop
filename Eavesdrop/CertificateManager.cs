@@ -23,7 +23,7 @@ namespace Eavesdrop
 {
     public class CertificateManager : IDisposable
     {
-        private AsymmetricKeyParameter _privKey;
+        private AsymmetricKeyParameter _privateKey;
         private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
         public string Issuer { get; }
@@ -154,9 +154,9 @@ namespace Eavesdrop
 
             // Valid For
             DateTime notBefore = DateTime.UtcNow.Date;
-            DateTime notAfter = notBefore.AddYears(20);
-
             certificateGenerator.SetNotBefore(notBefore);
+
+            DateTime notAfter = notBefore.AddYears(1);
             certificateGenerator.SetNotAfter(notAfter);
 
             // Subject Public Key
@@ -167,52 +167,43 @@ namespace Eavesdrop
             AsymmetricCipherKeyPair subjectKeyPair = keyPairGenerator.GenerateKeyPair();
             certificateGenerator.SetPublicKey(subjectKeyPair.Public);
 
-            AsymmetricKeyParameter issuerPrivKey = null;
+            AsymmetricKeyParameter issuerPrivateKey = null;
             if (isCertificateAuthority)
             {
-                issuerPrivKey = subjectKeyPair.Private;
-                _privKey = issuerPrivKey;
+                issuerPrivateKey = subjectKeyPair.Private;
+                _privateKey = issuerPrivateKey;
             }
             else
             {
-                if (_privKey == null)
+                if (_privateKey == null)
                 {
                     X509Certificate2 rootCA = InstallCertificate(RootStore, RootCertificateName);
-                    _privKey = TransformRSAPrivateKey(rootCA.PrivateKey);
+                    _privateKey = TransformRSAPrivateKey(rootCA.GetRSAPrivateKey().ExportParameters(true));
                 }
-                issuerPrivKey = _privKey;
+                issuerPrivateKey = _privateKey;
             }
 
-            // selfsign certificate
-            ISignatureFactory signatureFactory = new Asn1SignatureFactory("SHA256WITHRSA", issuerPrivKey, random);
-            Org.BouncyCastle.X509.X509Certificate certificate = certificateGenerator.Generate(signatureFactory);
-
-            // merge into X509Certificate2
-            var x509 = new X509Certificate2(certificate.GetEncoded());
-            if (isCertificateAuthority)
+            var privateKey = (RsaPrivateCrtKeyParameters)issuerPrivateKey;
+            if (!isCertificateAuthority)
             {
-                x509.PrivateKey = DotNetUtilities.ToRSA((RsaPrivateCrtKeyParameters)issuerPrivKey);
-            }
-            else
-            {
-                // correcponding private key
                 PrivateKeyInfo info = PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
                 var seq = (Asn1Sequence)Asn1Object.FromByteArray(info.ParsePrivateKey().GetDerEncoded());
                 var rsa = RsaPrivateKeyStructure.GetInstance(seq);
 
-                var rsaparams = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent,
+                privateKey = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent,
                     rsa.PrivateExponent, rsa.Prime1, rsa.Prime2, rsa.Exponent1, rsa.Exponent2, rsa.Coefficient);
-
-                x509.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
             }
-            return x509;
+
+            // Self-Sign Certificate
+            ISignatureFactory signatureFactory = new Asn1SignatureFactory("SHA256WITHRSA", issuerPrivateKey, random);
+            X509Certificate2 certificate = GetSignedCertificate(certificateGenerator.Generate(signatureFactory), privateKey);
+
+            certificate.FriendlyName = subjectName;
+            return certificate;
         }
 
-        private AsymmetricKeyParameter TransformRSAPrivateKey(AsymmetricAlgorithm privateKey)
+        private AsymmetricKeyParameter TransformRSAPrivateKey(RSAParameters parameters)
         {
-            var prov = (RSACryptoServiceProvider)privateKey;
-            RSAParameters parameters = prov.ExportParameters(true);
-
             return new RsaPrivateCrtKeyParameters(
                 new BigInteger(1, parameters.Modulus),
                 new BigInteger(1, parameters.Exponent),
@@ -222,6 +213,21 @@ namespace Eavesdrop
                 new BigInteger(1, parameters.DP),
                 new BigInteger(1, parameters.DQ),
                 new BigInteger(1, parameters.InverseQ));
+        }
+        private X509Certificate2 GetSignedCertificate(Org.BouncyCastle.X509.X509Certificate bcCertificate, RsaPrivateCrtKeyParameters privateKey)
+        {
+            string alias = bcCertificate.SubjectDN.ToString();
+
+            var pkcs12 = new Pkcs12Store();
+            var entry = new X509CertificateEntry(bcCertificate);
+
+            pkcs12.SetCertificateEntry(alias, entry);
+            pkcs12.SetKeyEntry(alias, new AsymmetricKeyEntry(privateKey), new[] { entry });
+            using (var pfxStream = new MemoryStream())
+            {
+                pkcs12.Save(pfxStream, null, new SecureRandom());
+                return new X509Certificate2(pfxStream.ToArray(), (string)null, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+            }
         }
 
         public void DestroyCertificates()
