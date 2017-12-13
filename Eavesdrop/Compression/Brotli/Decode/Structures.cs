@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using size_t = BrotliSharpLib.Brotli.SizeT;
-using reg_t = BrotliSharpLib.Brotli.SizeT;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
+using reg_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         internal enum BrotliDecoderErrorCode {
             /* Same as BrotliDecoderResult values */

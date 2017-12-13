@@ -1,9 +1,7 @@
-﻿using System;
-using size_t = BrotliSharpLib.Brotli.SizeT;
-using System.Collections.Generic;
+﻿using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 using System.Runtime.InteropServices;
 
-namespace BrotliSharpLib
+namespace Eavesdrop.Compression.Brotli
 {
     public static partial class Brotli
     {

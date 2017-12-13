@@ -1,6 +1,6 @@
-﻿using size_t = BrotliSharpLib.Brotli.SizeT;
+﻿using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         private static unsafe void StoreStaticCodeLengthCode(
             size_t* storage_ix, byte* storage) {

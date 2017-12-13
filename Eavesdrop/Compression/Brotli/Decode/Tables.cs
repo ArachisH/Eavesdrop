@@ -1,7 +1,7 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli
+{
     public static partial class Brotli {
         private static readonly PrefixCodeRange[] kBlockLengthPrefixCode = {
             new ushort[] {1, 2}, new ushort[] {5, 2}, new ushort[] {9, 2}, new ushort[] {13, 2},

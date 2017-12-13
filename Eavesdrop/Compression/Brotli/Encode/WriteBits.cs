@@ -1,6 +1,6 @@
-﻿using size_t = BrotliSharpLib.Brotli.SizeT;
+﻿using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         /* This function writes bits into bytes in increasing addresses, and within
            a byte least-significant-bit first.

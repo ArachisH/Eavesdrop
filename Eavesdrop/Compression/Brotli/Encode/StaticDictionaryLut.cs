@@ -1,4 +1,4 @@
-﻿namespace BrotliSharpLib
+﻿namespace Eavesdrop.Compression.Brotli
 {
     public static partial class Brotli
     {

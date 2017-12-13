@@ -2,9 +2,9 @@
 using System.IO;
 using System.Runtime.InteropServices;
 
-using size_t = BrotliSharpLib.Brotli.SizeT;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib
+namespace Eavesdrop.Compression.Brotli
 {
     /// <summary>
     /// A class for compressing and decompressing data using the brotli algorithm.

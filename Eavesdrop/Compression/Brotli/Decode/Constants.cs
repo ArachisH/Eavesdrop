@@ -1,8 +1,8 @@
-﻿using System;
-using System.Runtime.InteropServices;
-using reg_t = BrotliSharpLib.Brotli.SizeT;
+﻿using System.Runtime.InteropServices;
+using reg_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli
+{
     public static partial class Brotli {
         private const int BROTLI_HUFFMAN_MAX_CODE_LENGTH = 15;
 

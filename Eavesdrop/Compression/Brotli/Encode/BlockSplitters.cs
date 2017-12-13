@@ -1,7 +1,7 @@
 ﻿using System;
-using size_t = BrotliSharpLib.Brotli.SizeT;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         private static readonly size_t kMaxLiteralHistograms = 100;
         private static readonly size_t kMaxCommandHistograms = 50;

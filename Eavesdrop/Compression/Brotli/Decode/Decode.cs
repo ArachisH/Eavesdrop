@@ -1,14 +1,13 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using size_t = BrotliSharpLib.Brotli.SizeT;
-using reg_t = BrotliSharpLib.Brotli.SizeT;
-using BrotliDecoderState = BrotliSharpLib.Brotli.BrotliDecoderStateStruct;
-using BrotliBitReaderState = BrotliSharpLib.Brotli.BrotliBitReader;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
+using BrotliDecoderState = Eavesdrop.Compression.Brotli.Brotli.BrotliDecoderStateStruct;
+using BrotliBitReaderState = Eavesdrop.Compression.Brotli.Brotli.BrotliBitReader;
 
 // ReSharper disable All
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli
+{
     public static partial class Brotli {
         private static unsafe T CreateStruct<T>() {
 #if SIZE_OF_T

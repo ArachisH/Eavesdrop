@@ -3,9 +3,9 @@ using System.IO;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 
-using size_t = BrotliSharpLib.Brotli.SizeT;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib
+namespace Eavesdrop.Compression.Brotli
 {
     /// <summary>
     /// Represents a Brotli stream for compression or decompression.

@@ -1,7 +1,4 @@
-﻿using System;
-using System.Runtime.InteropServices;
-
-namespace BrotliSharpLib
+﻿namespace Eavesdrop.Compression.Brotli
 {
     public static partial class Brotli
     {

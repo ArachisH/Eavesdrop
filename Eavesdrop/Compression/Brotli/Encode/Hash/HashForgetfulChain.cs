@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using size_t = BrotliSharpLib.Brotli.SizeT;
-using score_t = BrotliSharpLib.Brotli.SizeT;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
+using score_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         private class HashForgetfulChainH40 : Hasher {
             private const int BUCKET_BITS = 15;

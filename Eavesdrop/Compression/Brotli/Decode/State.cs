@@ -1,8 +1,8 @@
 ﻿using System;
-using size_t = BrotliSharpLib.Brotli.SizeT;
-using BrotliDecoderState = BrotliSharpLib.Brotli.BrotliDecoderStateStruct;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
+using BrotliDecoderState = Eavesdrop.Compression.Brotli.Brotli.BrotliDecoderStateStruct;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         internal static unsafe void BrotliDecoderStateInit(ref BrotliDecoderState s) {
             BrotliDecoderStateInitWithCustomAllocators(ref s, null, null, null);

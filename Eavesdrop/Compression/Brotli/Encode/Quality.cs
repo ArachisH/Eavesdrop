@@ -1,7 +1,7 @@
 ﻿using System;
-using size_t = BrotliSharpLib.Brotli.SizeT;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         /* Returns hash-table size for quality levels 0 and 1. */
         private static size_t MaxHashTableSize(int quality) {

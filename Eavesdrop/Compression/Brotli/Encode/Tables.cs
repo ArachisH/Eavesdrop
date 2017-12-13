@@ -1,6 +1,6 @@
-﻿using size_t = BrotliSharpLib.Brotli.SizeT;
+﻿using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         private static readonly byte[] kDefaultCommandDepths = {
             0, 4, 4, 5, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8,

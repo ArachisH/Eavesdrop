@@ -1,6 +1,4 @@
-﻿using size_t = BrotliSharpLib.Brotli.SizeT;
-
-namespace BrotliSharpLib
+﻿namespace Eavesdrop.Compression.Brotli
 {
     public static partial class Brotli
     {

@@ -1,4 +1,4 @@
-﻿namespace BrotliSharpLib {
+﻿namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         private static unsafe int ToUpperCase(byte* p) {
             if (p[0] < 0xc0) {

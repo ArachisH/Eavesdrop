@@ -1,8 +1,8 @@
 ﻿using System;
-using size_t = BrotliSharpLib.Brotli.SizeT;
-using BrotliEncoderState = BrotliSharpLib.Brotli.BrotliEncoderStateStruct;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
+using BrotliEncoderState = Eavesdrop.Compression.Brotli.Brotli.BrotliEncoderStateStruct;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         internal static unsafe BrotliEncoderState BrotliEncoderCreateInstance(brotli_alloc_func alloc_func,
             brotli_free_func free_func, void* opaque) {

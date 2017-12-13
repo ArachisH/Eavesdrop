@@ -1,8 +1,8 @@
-﻿using System.Runtime.CompilerServices;
-using size_t = BrotliSharpLib.Brotli.SizeT;
-using reg_t = BrotliSharpLib.Brotli.SizeT;
+﻿using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
+using reg_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli
+{
     public static partial class Brotli {
         /* Returns reverse(num >> BROTLI_REVERSE_BITS_BASE, BROTLI_REVERSE_BITS_MAX),
            where reverse(value, len) is the bit-wise reversal of the len least

@@ -1,6 +1,6 @@
-﻿using size_t = BrotliSharpLib.Brotli.SizeT;
+﻿using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static unsafe partial class Brotli {
         private static void BrotliEnsureCapacity(ref MemoryManager m, int t, void** a, size_t* c, size_t r) {
             if (*c < r) {

@@ -1,7 +1,7 @@
 ﻿using System;
-using size_t = BrotliSharpLib.Brotli.SizeT;
+using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         private class CompressFragment {
             private static readonly size_t MAX_DISTANCE = BROTLI_MAX_BACKWARD_LIMIT(18);

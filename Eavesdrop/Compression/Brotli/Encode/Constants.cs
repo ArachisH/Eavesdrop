@@ -1,6 +1,6 @@
-﻿using size_t = BrotliSharpLib.Brotli.SizeT;
+﻿using size_t = Eavesdrop.Compression.Brotli.Brotli.SizeT;
 
-namespace BrotliSharpLib {
+namespace Eavesdrop.Compression.Brotli {
     public static partial class Brotli {
         internal const int BROTLI_MIN_WINDOW_BITS = 10;
         internal const int BROTLI_MAX_WINDOW_BITS = 24;
