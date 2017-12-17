@@ -122,8 +122,11 @@ namespace Eavesdrop
                     if (request.ContentLength > 0)
                     {
                         byte[] payload = await EavesNode.GetPayloadAsync(local.GetStream(), request.ContentLength).ConfigureAwait(false);
-                        requestContent = new ByteArrayContent(payload);
-                        requestArgs.Content = requestContent;
+                        if (payload?.Length > 0)
+                        {
+                            requestContent = new ByteArrayContent(payload);
+                            requestArgs.Content = requestContent;
+                        }
                     }
 
                     await OnRequestInterceptedAsync(requestArgs).ConfigureAwait(false);
@@ -171,13 +174,15 @@ namespace Eavesdrop
                 try
                 {
                     byte[] payload = await EavesNode.GetPayloadAsync(response).ConfigureAwait(false);
-                    responseContent = new ByteArrayContent(payload);
-                    responseArgs.Content = responseContent;
-
+                    if (payload?.Length > 0)
+                    {
+                        responseContent = new ByteArrayContent(payload);
+                        responseArgs.Content = responseContent;
+                    }
                     await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
                     if (responseArgs.Cancel) return;
 
-                    if (response.Headers[HttpResponseHeader.ContentEncoding] == "br")
+                    if (responseArgs.Content != null && response.Headers[HttpResponseHeader.ContentEncoding] == "br")
                     {
                         byte[] newPayload = await responseArgs.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
                         byte[] compressedPayload = Brotli.CompressBuffer(newPayload, 0, newPayload.Length);

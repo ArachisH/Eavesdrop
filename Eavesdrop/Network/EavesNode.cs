@@ -263,11 +263,13 @@ namespace Eavesdrop.Network
             }
         }
 
-        public static Task<byte[]> GetPayloadAsync(WebResponse response)
+        public static async Task<byte[]> GetPayloadAsync(WebResponse response)
         {
             using (Stream input = response.GetResponseStream())
             {
-                return GetPayloadAsync(input, response.ContentLength, response.Headers[HttpResponseHeader.ContentEncoding]);
+                // DO NOT EXIT THIS BLOCK, will dispose the stream.
+                // Therefore, 'await' until the method is finished using the stream object.
+                return await GetPayloadAsync(input, response.ContentLength, response.Headers[HttpResponseHeader.ContentEncoding]);
             }
         }
         public static async Task<byte[]> GetPayloadAsync(Stream input, long length, string encoding = null)
