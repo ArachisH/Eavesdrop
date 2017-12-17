@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.ComponentModel;
@@ -76,10 +75,8 @@ namespace Eavesdrop
             Response = response;
             if (!overrideContent) return;
 
-            using (Stream responseInput = response.GetResponseStream())
-            {
-                Content = await EavesNode.GetContentAsync(responseInput, response.ContentLength).ConfigureAwait(false);
-            }
+            byte[] payload = await EavesNode.GetPayloadAsync(response).ConfigureAwait(false);
+            Content = new ByteArrayContent(payload);
         }
     }
 }

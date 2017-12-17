@@ -5,9 +5,11 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Eavesdrop.Network;
-using System.Runtime.InteropServices;
+
+using BrotliSharpLib;
 
 namespace Eavesdrop
 {
@@ -40,9 +42,8 @@ namespace Eavesdrop
         }
 
         public static List<string> Overrides { get; }
-        public static CertificateManager Certifier { get; }
-
         public static bool IsRunning { get; private set; }
+        public static CertificateManager Certifier { get; }
 
         static Eavesdropper()
         {
@@ -120,7 +121,8 @@ namespace Eavesdrop
                 {
                     if (request.ContentLength > 0)
                     {
-                        requestContent = await local.GetRequestContentAsync(request.ContentLength).ConfigureAwait(false);
+                        byte[] payload = await EavesNode.GetPayloadAsync(local.GetStream(), request.ContentLength).ConfigureAwait(false);
+                        requestContent = new ByteArrayContent(payload);
                         requestArgs.Content = requestContent;
                     }
 
@@ -130,6 +132,14 @@ namespace Eavesdrop
                     if (requestArgs.Cancel) return;
                     if (requestArgs.Content != null)
                     {
+                        if (request.Headers[HttpRequestHeader.ContentEncoding] == "br")
+                        {
+                            byte[] payload = await requestArgs.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                            byte[] compressedPayload = Brotli.CompressBuffer(payload, 0, payload.Length);
+
+                            requestArgs.Content.Dispose();
+                            requestArgs.Content = new ByteArrayContent(compressedPayload);
+                        }
                         request.ContentLength = (long)requestArgs.Content.Headers.ContentLength;
 
                         using (requestArgs.Content)
@@ -160,14 +170,21 @@ namespace Eavesdrop
                 var responseArgs = new ResponseInterceptedEventArgs(request, response);
                 try
                 {
-                    using (Stream responseInput = response.GetResponseStream())
-                    {
-                        responseContent = await EavesNode.GetContentAsync(responseInput, response.ContentLength).ConfigureAwait(false);
-                        responseArgs.Content = responseContent;
-                    }
+                    byte[] payload = await EavesNode.GetPayloadAsync(response).ConfigureAwait(false);
+                    responseContent = new ByteArrayContent(payload);
+                    responseArgs.Content = responseContent;
 
                     await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
                     if (responseArgs.Cancel) return;
+
+                    if (response.Headers[HttpResponseHeader.ContentEncoding] == "br")
+                    {
+                        byte[] newPayload = await responseArgs.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                        byte[] compressedPayload = Brotli.CompressBuffer(newPayload, 0, newPayload.Length);
+
+                        responseArgs.Content.Dispose();
+                        responseArgs.Content = new ByteArrayContent(compressedPayload);
+                    }
 
                     await local.SendResponseAsync(responseArgs.Response, responseArgs.Content).ConfigureAwait(false);
                 }

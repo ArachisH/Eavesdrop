@@ -12,6 +12,8 @@ using System.Security.Authentication;
 using System.Text.RegularExpressions;
 using System.Security.Cryptography.X509Certificates;
 
+using BrotliSharpLib;
+
 namespace Eavesdrop.Network
 {
     public class EavesNode : IDisposable
@@ -31,11 +33,6 @@ namespace Eavesdrop.Network
         {
             _client = client;
             _certifier = certifier;
-        }
-
-        public Task<ByteArrayContent> GetRequestContentAsync(long length)
-        {
-            return GetContentAsync(GetStream(), length);
         }
 
         public Task<HttpWebRequest> ReadRequestAsync()
@@ -246,7 +243,8 @@ namespace Eavesdrop.Network
                         break;
                     }
 
-                    default: request.Headers[name] = value; break;
+                    default:
+                    request.Headers[name] = value; break;
                 }
             }
             return request;
@@ -265,7 +263,14 @@ namespace Eavesdrop.Network
             }
         }
 
-        public static async Task<ByteArrayContent> GetContentAsync(Stream input, long length)
+        public static Task<byte[]> GetPayloadAsync(WebResponse response)
+        {
+            using (Stream input = response.GetResponseStream())
+            {
+                return GetPayloadAsync(input, response.ContentLength, response.Headers[HttpResponseHeader.ContentEncoding]);
+            }
+        }
+        public static async Task<byte[]> GetPayloadAsync(Stream input, long length, string encoding = null)
         {
             byte[] payload = null;
             if (length >= 0)
@@ -290,7 +295,11 @@ namespace Eavesdrop.Network
                 }
             }
             if (payload.Length == 0) return null;
-            return new ByteArrayContent(payload);
+            if (encoding == "br")
+            {
+                payload = Brotli.DecompressBuffer(payload, 0, payload.Length);
+            }
+            return payload;
         }
     }
 }
