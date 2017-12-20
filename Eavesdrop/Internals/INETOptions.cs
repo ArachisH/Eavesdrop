@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
+using Microsoft.Win32;
+
 namespace Eavesdrop
 {
     public static class INETOptions
@@ -10,6 +12,7 @@ namespace Eavesdrop
         private static readonly object _stateLock;
         private static readonly int _iNetOptionSize;
         private static readonly int _iNetPackageSize;
+        private static readonly RegistryKey _proxyKey;
 
         public static List<string> Overrides { get; }
 
@@ -24,8 +27,10 @@ namespace Eavesdrop
             _stateLock = new object();
             _iNetOptionSize = Marshal.SizeOf(typeof(INETOption));
             _iNetPackageSize = Marshal.SizeOf(typeof(INETPackage));
+            _proxyKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings", true);
 
             Overrides = new List<string>();
+            Load();
         }
 
         public static void Save()
@@ -84,6 +89,65 @@ namespace Eavesdrop
                 NativeMethods.InternetSetOption(IntPtr.Zero, 37, iNetPackagePtr, _iNetPackageSize);
             }
         }
+        public static void Load()
+        {
+            lock (_stateLock)
+            {
+                LoadAddresses();
+                LoadOverrides();
+
+                object proxyEnable = _proxyKey.GetValue("ProxyEnable");
+                if (proxyEnable != null)
+                {
+                    IsProxyEnabled = ((int)proxyEnable == 1);
+                }
+            }
+        }
+
+        private static void LoadOverrides()
+        {
+            var proxyOverride = (string)_proxyKey.GetValue("ProxyOverride");
+            if (string.IsNullOrWhiteSpace(proxyOverride)) return;
+
+            string[] overrides = proxyOverride.Split(';');
+            foreach (string @override in overrides)
+            {
+                if (@override == "<local>")
+                {
+                    IsIgnoringLocalTraffic = true;
+                }
+                else if (!Overrides.Contains(@override))
+                {
+                    Overrides.Add(@override);
+                }
+            }
+        }
+        private static void LoadAddresses()
+        {
+            var proxyServer = (string)_proxyKey.GetValue("ProxyServer");
+            if (string.IsNullOrWhiteSpace(proxyServer)) return;
+
+            string[] values = proxyServer.Split(';');
+            foreach (string value in values)
+            {
+                string[] pair = value.Split('=');
+                if (pair.Length != 2)
+                {
+                    HTTPAddress = value;
+                    HTTPSAddress = value;
+                    return;
+                }
+
+                string address = pair[1];
+                string protocol = pair[0];
+                switch (protocol)
+                {
+                    case "http": HTTPAddress = address; break;
+                    case "https": HTTPSAddress = address; break;
+                }
+            }
+        }
+
         private static string GetJoinedAddresses()
         {
             var addresses = new List<string>(2);

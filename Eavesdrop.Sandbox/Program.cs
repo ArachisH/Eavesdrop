@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading.Tasks;
-using System.Runtime.InteropServices;
 
 namespace Eavesdrop.Sandbox
 {
@@ -16,19 +15,10 @@ namespace Eavesdrop.Sandbox
         {
             Eavesdropper.RequestInterceptedAsync += RequestInterceptedAsync;
             Eavesdropper.ResponseInterceptedAsync += ResponseInterceptedAsync;
-
-            //Eavesdropper.Certifier.DestroyCertificates();
-            bool installedCertificateAuthority = Eavesdropper.Certifier.CreateTrustedRootCertificate();
-
-            var interceptors = Interceptors.HTTP;
-            if (installedCertificateAuthority)
-            {
-                interceptors |= Interceptors.HTTPS;
-                Eavesdropper.Certifier.ExportTrustedRootCertificate(Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + "//EavesdropCA.cer");
-            }
+            Eavesdropper.Certifier.CreateTrustedRootCertificate();
 
             Eavesdropper.Initiate(8282);
-            Console.Title = $"{RuntimeInformation.OSDescription} | Eavesdrop.Sandbox({8282} | [{interceptors}]) - Press any key to exit...";
+            Console.Title = $"Eavesdrop.Sandbox({8282}) - Press any key to exit...";
 
             Console.ReadLine();
             Eavesdropper.Terminate();
