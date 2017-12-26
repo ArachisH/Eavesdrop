@@ -43,7 +43,7 @@ namespace Eavesdrop
 
         public static List<string> Overrides { get; }
         public static bool IsRunning { get; private set; }
-        public static CertificateManager Certifier { get; }
+        public static CertificateManager Certifier { get; set; }
 
         static Eavesdropper()
         {
