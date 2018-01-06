@@ -182,7 +182,7 @@ namespace Eavesdrop
                     await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
                     if (responseArgs.Cancel) return;
 
-                    if (responseArgs.Content != null && response.Headers[HttpResponseHeader.ContentEncoding] == "br")
+                    if (responseArgs.Content != null && (responseArgs.Response is HttpWebResponse httpResponse) && httpResponse.ContentEncoding == "br")
                     {
                         byte[] newPayload = await responseArgs.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
                         byte[] compressedPayload = Brotli.CompressBuffer(newPayload, 0, newPayload.Length);

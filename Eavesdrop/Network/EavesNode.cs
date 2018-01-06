@@ -267,9 +267,12 @@ namespace Eavesdrop.Network
         {
             using (Stream input = response.GetResponseStream())
             {
-                // DO NOT EXIT THIS BLOCK, will dispose the stream.
-                // Therefore, 'await' until the method is finished using the stream object.
-                return await GetPayloadAsync(input, response.ContentLength, response.Headers[HttpResponseHeader.ContentEncoding]);
+                string encoding = null;
+                if (response is HttpWebResponse httpResponse)
+                {
+                    encoding = httpResponse.ContentEncoding;
+                }
+                return await GetPayloadAsync(input, response.ContentLength, encoding);
             }
         }
         public static async Task<byte[]> GetPayloadAsync(Stream input, long length, string encoding = null)
@@ -278,13 +281,19 @@ namespace Eavesdrop.Network
             if (length >= 0)
             {
                 int totalBytesRead = 0;
+                int nullBytesReadCount = 0;
                 payload = new byte[length];
                 do
                 {
                     int bytesLeft = (payload.Length - totalBytesRead);
                     int bytesRead = input.Read(payload, totalBytesRead, bytesLeft);
 
-                    totalBytesRead += bytesRead;
+                    if (bytesRead > 0)
+                    {
+                        nullBytesReadCount = 0;
+                        totalBytesRead += bytesRead;
+                    }
+                    else if (++nullBytesReadCount >= 2) return null;
                 }
                 while (totalBytesRead != payload.Length);
             }
