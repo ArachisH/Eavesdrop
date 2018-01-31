@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.Security;
 using System.Globalization;
+using System.IO.Compression;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Security.Authentication;
@@ -33,6 +34,8 @@ namespace Eavesdrop.Network
         {
             _client = client;
             _certifier = certifier;
+
+            _client.NoDelay = true;
         }
 
         public Task<HttpWebRequest> ReadRequestAsync()
@@ -72,6 +75,40 @@ namespace Eavesdrop.Network
             else return CreateRequest(method, headers, new Uri(requestUrl));
         }
 
+        public async Task<ByteArrayContent> ReadRequestContentAsync(WebRequest request)
+        {
+            byte[] payload = await GetPayload(GetStream(), request.ContentLength).ConfigureAwait(false);
+            if (payload == null) return null;
+
+            if (request.Headers[HttpRequestHeader.ContentEncoding] == "br")
+            {
+                request.Headers[HttpRequestHeader.ContentEncoding] = ""; // No longer encoded.
+                payload = Brotli.DecompressBuffer(payload, 0, payload.Length);
+            }
+            return new ByteArrayContent(payload);
+        }
+        public async Task WriteRequestContentAsync(WebRequest request, HttpContent content)
+        {
+            byte[] payload = null;
+            if (content is StreamContent streamContent)
+            {
+                // TODO:
+                throw new NotSupportedException();
+            }
+            else payload = await content.ReadAsByteArrayAsync().ConfigureAwait(false);
+
+            if (request.Headers[HttpRequestHeader.ContentEncoding] == "br")
+            {
+                payload = Brotli.CompressBuffer(payload, 0, payload.Length);
+            }
+
+            request.ContentLength = payload.Length;
+            using (Stream output = await request.GetRequestStreamAsync().ConfigureAwait(false))
+            {
+                await output.WriteAsync(payload, 0, payload.Length).ConfigureAwait(false);
+            }
+        }
+
         public Task SendResponseAsync(WebResponse response, HttpContent content)
         {
             string description = "OK";
@@ -89,23 +126,16 @@ namespace Eavesdrop.Network
         }
         public async Task SendResponseAsync(HttpStatusCode status, string description, WebHeaderCollection headers, HttpContent content)
         {
-            byte[] payload = null;
-            if (content != null)
-            {
-                payload = await content.ReadAsByteArrayAsync().ConfigureAwait(false);
-            }
-
             var headerBuilder = new StringBuilder();
             headerBuilder.AppendLine($"HTTP/{HttpVersion.Version10} {(int)status} {description}");
             if (headers != null)
             {
+
                 foreach (string header in headers.AllKeys)
                 {
                     string value = headers[header];
-                    if (header.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
-                    {
-                        value = (payload?.Length.ToString() ?? "0");
-                    }
+                    if (string.IsNullOrWhiteSpace(value)) continue;
+
                     if (header.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
                     {
                         foreach (string setCookie in _responseCookieSplitter.Split(value))
@@ -118,16 +148,29 @@ namespace Eavesdrop.Network
             }
             headerBuilder.AppendLine();
 
-            int payloadSize = (payload?.Length ?? 0);
             byte[] headerData = Encoding.UTF8.GetBytes(headerBuilder.ToString());
-            byte[] responseData = new byte[headerData.Length + payloadSize];
-
-            Buffer.BlockCopy(headerData, 0, responseData, 0, headerData.Length);
-            if (payloadSize > 0)
+            await GetStream().WriteAsync(headerData, 0, headerData.Length).ConfigureAwait(false);
+            if (content != null)
             {
-                Buffer.BlockCopy(payload, 0, responseData, headerData.Length, payload.Length);
+                // TODO: If the Content-Encoding header has been changed, re-compress while writing?
+                Stream input = await content.ReadAsStreamAsync().ConfigureAwait(false);
+
+                int bytesRead = 0;
+                int totalBytesRead = 0;
+                var buffer = new byte[4096];
+                int nullBytesReadStreak = 0;
+                do
+                {
+                    if ((bytesRead = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+                    {
+                        nullBytesReadStreak = 0;
+                        totalBytesRead += bytesRead;
+                        await GetStream().WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
+                    }
+                    else if (++nullBytesReadStreak >= 2) return;
+                }
+                while (_client.Connected);
             }
-            await GetStream().WriteAsync(responseData, 0, responseData.Length).ConfigureAwait(false);
         }
 
         public Stream GetStream()
@@ -186,7 +229,6 @@ namespace Eavesdrop.Network
         private HttpWebRequest CreateRequest(string method, List<string> headers, Uri requestUri)
         {
             HttpWebRequest request = WebRequest.CreateHttp(requestUri);
-            request.AutomaticDecompression = (DecompressionMethods.GZip | DecompressionMethods.Deflate);
             request.ProtocolVersion = HttpVersion.Version10;
             request.CookieContainer = new CookieContainer();
             request.AllowAutoRedirect = false;
@@ -258,58 +300,54 @@ namespace Eavesdrop.Network
         {
             if (disposing)
             {
-                GetStream().Close();
-                _client.Close();
+                GetStream().Dispose();
+                _client.Dispose();
             }
         }
 
-        public static async Task<byte[]> GetPayloadAsync(WebResponse response)
+        public static StreamContent ReadResponseContent(WebResponse response)
         {
-            using (Stream input = response.GetResponseStream())
+            if (response.ContentLength == 0)
             {
-                string encoding = null;
-                if (response is HttpWebResponse httpResponse)
-                {
-                    encoding = httpResponse.ContentEncoding;
-                }
-                return await GetPayloadAsync(input, response.ContentLength, encoding);
+                response.GetResponseStream().Dispose();
+                return null;
             }
-        }
-        public static async Task<byte[]> GetPayloadAsync(Stream input, long length, string encoding = null)
-        {
-            byte[] payload = null;
-            if (length >= 0)
-            {
-                int totalBytesRead = 0;
-                int nullBytesReadCount = 0;
-                payload = new byte[length];
-                do
-                {
-                    int bytesLeft = (payload.Length - totalBytesRead);
-                    int bytesRead = input.Read(payload, totalBytesRead, bytesLeft);
 
-                    if (bytesRead > 0)
-                    {
-                        nullBytesReadCount = 0;
-                        totalBytesRead += bytesRead;
-                    }
-                    else if (++nullBytesReadCount >= 2) return null;
-                }
-                while (totalBytesRead != payload.Length);
-            }
-            else
+            Stream input = response.GetResponseStream();
+            if (response is HttpWebResponse httpResponse && !string.IsNullOrWhiteSpace(httpResponse.ContentEncoding))
             {
-                using (var output = new MemoryStream())
+                switch (httpResponse.ContentEncoding)
                 {
-                    await input.CopyToAsync(output).ConfigureAwait(false);
-                    payload = output.ToArray();
+                    case "br": input = new BrotliStream(input, CompressionMode.Decompress); break;
+                    case "gzip": input = new GZipStream(input, CompressionMode.Decompress); break;
+                    case "deflate": input = new DeflateStream(input, CompressionMode.Decompress); break;
                 }
+                response.Headers.Remove(HttpResponseHeader.ContentLength);
+                response.Headers.Remove(HttpResponseHeader.ContentEncoding);
+                response.Headers.Add(HttpResponseHeader.TransferEncoding, "chunked");
             }
-            if (payload.Length == 0) return null;
-            if (encoding == "br")
+            return new StreamContent(input, response.ContentLength > 0 ? (int)response.ContentLength : 4096);
+        }
+        public static async Task<byte[]> GetPayload(Stream input, long length)
+        {
+            if (length < 1) return null;
+
+            int totalBytesRead = 0;
+            int nullBytesReadCount = 0;
+            var payload = new byte[length];
+            do
             {
-                payload = Brotli.DecompressBuffer(payload, 0, payload.Length);
+                int bytesLeft = (payload.Length - totalBytesRead);
+                int bytesRead = await input.ReadAsync(payload, totalBytesRead, bytesLeft).ConfigureAwait(false);
+
+                if (bytesRead > 0)
+                {
+                    nullBytesReadCount = 0;
+                    totalBytesRead += bytesRead;
+                }
+                else if (++nullBytesReadCount >= 2) return null;
             }
+            while (totalBytesRead != payload.Length);
             return payload;
         }
     }
