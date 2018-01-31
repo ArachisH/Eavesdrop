@@ -10,21 +10,17 @@ namespace Eavesdrop
 {
     public class ResponseInterceptedEventArgs : CancelEventArgs
     {
-        private HttpWebResponse _httpResponse;
-
         private WebResponse _response;
         public WebResponse Response
         {
             get => _response;
-            private set
+            set
             {
                 _response = value;
-
-                _httpResponse = (value as HttpWebResponse);
-                if (_httpResponse != null)
+                if (value is HttpWebResponse httpResponse)
                 {
                     CookieContainer = new CookieContainer();
-                    CookieContainer.Add(_httpResponse.Cookies);
+                    CookieContainer.Add(httpResponse.Cookies);
                 }
                 else CookieContainer = null;
             }
@@ -64,19 +60,6 @@ namespace Eavesdrop
         {
             Request = request;
             Response = response;
-        }
-
-        public Task ChangeResponseAsync(WebResponse response)
-        {
-            return ChangeResponseAsync(response, true);
-        }
-        public async Task ChangeResponseAsync(WebResponse response, bool overrideContent)
-        {
-            Response = response;
-            if (!overrideContent) return;
-
-            byte[] payload = await EavesNode.GetPayloadAsync(response).ConfigureAwait(false);
-            Content = new ByteArrayContent(payload);
         }
     }
 }
