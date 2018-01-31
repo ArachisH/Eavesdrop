@@ -28,16 +28,12 @@ namespace Eavesdrop.Sandbox
         private Task RequestInterceptedAsync(object sender, RequestInterceptedEventArgs e)
         {
             Console.WriteLine("Intercepted Request: " + e.Uri);
-            return Task.CompletedTask;
+            return null;
         }
-        private async Task ResponseInterceptedAsync(object sender, ResponseInterceptedEventArgs e)
+        private Task ResponseInterceptedAsync(object sender, ResponseInterceptedEventArgs e)
         {
-            var payload = new byte[0];
-            if (e.Content != null)
-            {
-                payload = await e.Content.ReadAsByteArrayAsync();
-            }
-            Console.WriteLine($"Intercepted Response: {e.Uri}[{payload.Length:n0} Bytes]");
+            Console.WriteLine($"Intercepted Response: " + e.Uri);
+            return null;
         }
     }
 }
