@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Net;
-using System.ComponentModel;
 using System.Net.Http;
+using System.ComponentModel;
 
 namespace Eavesdrop
 {
