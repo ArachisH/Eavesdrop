@@ -1,15 +1,11 @@
 ﻿using System;
-using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 using Eavesdrop.Network;
-
-using BrotliSharpLib;
 
 namespace Eavesdrop
 {
@@ -109,7 +105,6 @@ namespace Eavesdrop
         }
         private static async Task HandleClientAsync(TcpClient client)
         {
-            await Task.Yield();
             using (var local = new EavesNode(Certifier, client))
             {
                 WebRequest request = await local.ReadRequestAsync().ConfigureAwait(false);
@@ -119,37 +114,14 @@ namespace Eavesdrop
                 var requestArgs = new RequestInterceptedEventArgs(request);
                 try
                 {
-                    if (request.ContentLength > 0)
-                    {
-                        byte[] payload = await EavesNode.GetPayloadAsync(local.GetStream(), request.ContentLength).ConfigureAwait(false);
-                        if (payload?.Length > 0)
-                        {
-                            requestContent = new ByteArrayContent(payload);
-                            requestArgs.Content = requestContent;
-                        }
-                    }
-
+                    requestArgs.Content = requestContent = await local.ReadRequestContentAsync(request).ConfigureAwait(false);
                     await OnRequestInterceptedAsync(requestArgs).ConfigureAwait(false);
-                    request = requestArgs.Request;
-
                     if (requestArgs.Cancel) return;
+
+                    request = requestArgs.Request;
                     if (requestArgs.Content != null)
                     {
-                        if (request.Headers[HttpRequestHeader.ContentEncoding] == "br")
-                        {
-                            byte[] payload = await requestArgs.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                            byte[] compressedPayload = Brotli.CompressBuffer(payload, 0, payload.Length);
-
-                            requestArgs.Content.Dispose();
-                            requestArgs.Content = new ByteArrayContent(compressedPayload);
-                        }
-                        request.ContentLength = (long)requestArgs.Content.Headers.ContentLength;
-
-                        using (requestArgs.Content)
-                        using (Stream requestOutput = await request.GetRequestStreamAsync().ConfigureAwait(false))
-                        {
-                            await requestArgs.Content.CopyToAsync(requestOutput).ConfigureAwait(false);
-                        }
+                        await local.WriteRequestContentAsync(request, requestArgs.Content).ConfigureAwait(false);
                     }
                 }
                 finally
@@ -157,7 +129,6 @@ namespace Eavesdrop
                     requestContent?.Dispose();
                     requestArgs.Content?.Dispose();
                 }
-
 
                 WebResponse response = null;
                 try { response = await request.GetResponseAsync().ConfigureAwait(false); }
@@ -173,23 +144,9 @@ namespace Eavesdrop
                 var responseArgs = new ResponseInterceptedEventArgs(request, response);
                 try
                 {
-                    byte[] payload = await EavesNode.GetPayloadAsync(response).ConfigureAwait(false);
-                    if (payload?.Length > 0)
-                    {
-                        responseContent = new ByteArrayContent(payload);
-                        responseArgs.Content = responseContent;
-                    }
+                    responseArgs.Content = responseContent = EavesNode.ReadResponseContent(response);
                     await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
                     if (responseArgs.Cancel) return;
-
-                    if (responseArgs.Content != null && (responseArgs.Response is HttpWebResponse httpResponse) && httpResponse.ContentEncoding == "br")
-                    {
-                        byte[] newPayload = await responseArgs.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                        byte[] compressedPayload = Brotli.CompressBuffer(newPayload, 0, newPayload.Length);
-
-                        responseArgs.Content.Dispose();
-                        responseArgs.Content = new ByteArrayContent(compressedPayload);
-                    }
 
                     await local.SendResponseAsync(responseArgs.Response, responseArgs.Content).ConfigureAwait(false);
                 }
