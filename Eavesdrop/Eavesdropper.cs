@@ -13,7 +13,6 @@ namespace Eavesdrop
     {
         private static TcpListener _listener;
         private static readonly object _stateLock;
-        private static TaskCompletionSource<bool> _terminationSource;
 
         public delegate Task AsyncEventHandler<TEventArgs>(object sender, TEventArgs e);
 
@@ -61,12 +60,8 @@ namespace Eavesdrop
 
                 if (_listener != null)
                 {
-                    _terminationSource = new TaskCompletionSource<bool>();
-
                     _listener.Stop();
                     _listener = null;
-
-                    _terminationSource.Task.Wait();
                 }
             }
         }
@@ -101,7 +96,6 @@ namespace Eavesdrop
                 }
                 catch (ObjectDisposedException) { }
             }
-            _terminationSource?.SetResult(true);
         }
         private static async Task HandleClientAsync(TcpClient client)
         {
