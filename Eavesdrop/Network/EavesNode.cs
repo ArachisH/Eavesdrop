@@ -130,7 +130,6 @@ namespace Eavesdrop.Network
             headerBuilder.AppendLine($"HTTP/{HttpVersion.Version10} {(int)status} {description}");
             if (headers != null)
             {
-
                 foreach (string header in headers.AllKeys)
                 {
                     string value = headers[header];
@@ -156,20 +155,17 @@ namespace Eavesdrop.Network
                 Stream input = await content.ReadAsStreamAsync().ConfigureAwait(false);
 
                 int bytesRead = 0;
-                int totalBytesRead = 0;
-                var buffer = new byte[4096];
-                int nullBytesReadStreak = 0;
+                var buffer = new byte[8192];
                 do
                 {
-                    if ((bytesRead = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+                    bytesRead = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                    if (_client.Connected && bytesRead > 0)
                     {
-                        nullBytesReadStreak = 0;
-                        totalBytesRead += bytesRead;
                         await GetStream().WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
                     }
-                    else if (++nullBytesReadStreak >= 2) return;
+                    else return;
                 }
-                while (_client.Connected);
+                while (input.CanRead && _client.Connected);
             }
         }
 
