@@ -132,6 +132,8 @@ namespace Eavesdrop.Network
             {
                 foreach (string header in headers.AllKeys)
                 {
+                    if (header == "Transfer-Encoding") continue;
+
                     string value = headers[header];
                     if (string.IsNullOrWhiteSpace(value)) continue;
 
