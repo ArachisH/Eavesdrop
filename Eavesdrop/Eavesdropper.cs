@@ -71,6 +71,10 @@ namespace Eavesdrop
         }
         public static void Initiate(int port, Interceptors interceptors)
         {
+            Initiate(port, Interceptors.Default, true);
+        }
+        public static void Initiate(int port, Interceptors interceptors, bool setSystemProxy)
+        {
             lock (_stateLock)
             {
                 Terminate();
@@ -81,7 +85,10 @@ namespace Eavesdrop
                 IsRunning = true;
 
                 Task.Factory.StartNew(InterceptRequestAsnync, TaskCreationOptions.LongRunning);
-                SetMachineProxy(port, interceptors);
+                
+                if (setSystemProxy) {
+                    SetMachineProxy(port, interceptors);
+                }
             }
         }
 
