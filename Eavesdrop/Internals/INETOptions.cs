@@ -99,7 +99,7 @@ namespace Eavesdrop
                 object proxyEnable = _proxyKey.GetValue("ProxyEnable");
                 if (proxyEnable != null)
                 {
-                    IsProxyEnabled = ((int)proxyEnable == 1);
+                    IsProxyEnabled = proxyEnable.ToString() == "1";
                 }
             }
         }
@@ -124,7 +124,7 @@ namespace Eavesdrop
         }
         private static void LoadAddresses()
         {
-            var proxyServer = (string)_proxyKey.GetValue("ProxyServer");
+            string proxyServer = _proxyKey.GetValue("ProxyServer").ToString();
             if (string.IsNullOrWhiteSpace(proxyServer)) return;
 
             string[] values = proxyServer.Split(';');
