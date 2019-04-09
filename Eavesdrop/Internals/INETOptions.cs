@@ -95,18 +95,13 @@ namespace Eavesdrop
             {
                 LoadAddresses();
                 LoadOverrides();
-
-                object proxyEnable = _proxyKey.GetValue("ProxyEnable");
-                if (proxyEnable != null)
-                {
-                    IsProxyEnabled = proxyEnable.ToString() == "1";
-                }
+                IsProxyEnabled = (_proxyKey.GetValue("ProxyEnable")?.ToString() == "1");
             }
         }
 
         private static void LoadOverrides()
         {
-            var proxyOverride = (string)_proxyKey.GetValue("ProxyOverride");
+            string proxyOverride = _proxyKey.GetValue("ProxyOverride")?.ToString();
             if (string.IsNullOrWhiteSpace(proxyOverride)) return;
 
             string[] overrides = proxyOverride.Split(';');
@@ -124,7 +119,7 @@ namespace Eavesdrop
         }
         private static void LoadAddresses()
         {
-            string proxyServer = _proxyKey.GetValue("ProxyServer").ToString();
+            string proxyServer = _proxyKey.GetValue("ProxyServer")?.ToString();
             if (string.IsNullOrWhiteSpace(proxyServer)) return;
 
             string[] values = proxyServer.Split(';');
