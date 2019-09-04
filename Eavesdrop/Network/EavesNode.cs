@@ -44,7 +44,6 @@ namespace Eavesdrop.Network
         }
         private async Task<HttpWebRequest> ReadRequestAsync(Uri baseUri)
         {
-            string method = null;
             var headers = new List<string>();
             string requestUrl = baseUri?.OriginalString;
 
@@ -54,7 +53,7 @@ namespace Eavesdrop.Network
             if (string.IsNullOrWhiteSpace(command)) return null;
             string[] values = command.Split(' ');
 
-            method = values[0];
+            string method = values[0];
             requestUrl += values[1];
             while (_client.Connected)
             {
@@ -89,10 +88,10 @@ namespace Eavesdrop.Network
         }
         public async Task WriteRequestContentAsync(WebRequest request, HttpContent content)
         {
-            byte[] payload = null;
-            if (content is StreamContent streamContent)
+            byte[] payload;
+            if (content is StreamContent)
             {
-                // TODO:
+                // TODO
                 throw new NotSupportedException();
             }
             else payload = await content.ReadAsByteArrayAsync().ConfigureAwait(false);
@@ -156,11 +155,10 @@ namespace Eavesdrop.Network
                 // TODO: If the Content-Encoding header has been changed, re-compress while writing?
                 Stream input = await content.ReadAsStreamAsync().ConfigureAwait(false);
 
-                int bytesRead = 0;
                 var buffer = new byte[8192];
                 do
                 {
-                    bytesRead = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                    int bytesRead = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
                     if (_client.Connected && bytesRead > 0)
                     {
                         await GetStream().WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
@@ -174,14 +172,6 @@ namespace Eavesdrop.Network
         public Stream GetStream()
         {
             return ((Stream)_secureStream ?? _client.GetStream());
-        }
-        private StreamWriter WrapStreamWriter()
-        {
-            return new StreamWriter(GetStream(), Encoding.UTF8, 1024, true);
-        }
-        private StreamReader WrapStreamReader(int bufferSize = 1024)
-        {
-            return new StreamReader(GetStream(), Encoding.UTF8, true, bufferSize, true);
         }
 
         private string ReadNonBufferedLine()
@@ -254,6 +244,7 @@ namespace Eavesdrop.Network
                     case "referer": request.Referer = value; break;
                     case "user-agent": request.UserAgent = value; break;
                     case "content-type": request.ContentType = value; break;
+                    case "date": request.Date = DateTime.Parse(value); break;
 
                     case "content-length":
                     {
