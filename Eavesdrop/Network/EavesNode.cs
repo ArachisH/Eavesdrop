@@ -13,7 +13,7 @@ using System.Security.Authentication;
 using System.Text.RegularExpressions;
 using System.Security.Cryptography.X509Certificates;
 
-using BrotliSharpLib;
+using Eavesdrop.Certificates;
 
 namespace Eavesdrop.Network
 {
@@ -82,7 +82,16 @@ namespace Eavesdrop.Network
             if (request.Headers[HttpRequestHeader.ContentEncoding] == "br")
             {
                 request.Headers[HttpRequestHeader.ContentEncoding] = ""; // No longer encoded.
-                payload = Brotli.DecompressBuffer(payload, 0, payload.Length);
+
+                using (var output = new MemoryStream(payload.Length)) // At least...
+                {
+                    using (var decoder = new BrotliStream(new MemoryStream(payload), CompressionMode.Decompress))
+                    {
+                        await decoder.CopyToAsync(output).ConfigureAwait(false);
+                    }
+                    await output.FlushAsync().ConfigureAwait(false);
+                    payload = output.ToArray();
+                }
             }
             return new ByteArrayContent(payload);
         }
@@ -98,7 +107,12 @@ namespace Eavesdrop.Network
 
             if (request.Headers[HttpRequestHeader.ContentEncoding] == "br")
             {
-                payload = Brotli.CompressBuffer(payload, 0, payload.Length);
+                byte[] encoded = new byte[BrotliEncoder.GetMaxCompressedLength(payload.Length)];
+                if (BrotliEncoder.TryCompress(payload, encoded, out int bytesWritten))
+                {
+                    payload = new byte[bytesWritten];
+                    Buffer.BlockCopy(encoded, 0, payload, 0, bytesWritten);
+                }
             }
 
             request.ContentLength = payload.Length;
