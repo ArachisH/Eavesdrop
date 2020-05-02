@@ -2,46 +2,59 @@
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-namespace Eavesdrop.Certificates
+namespace Eavesdrop
 {
     public class CertificateManager : IDisposable
     {
+        private readonly X509Store _rootStore, _myStore;
         private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
         public string Issuer { get; }
         public string CertificateAuthorityName { get; }
-        public ICertificateEngine CertificateEngine { get; }
-        public bool IsStoringPersonalCertificates { get; set; }
 
-        public X509Store MyStore { get; }
-        public X509Store RootStore { get; }
+        public DateTime NotAfter { get; set; }
+        public DateTime NotBefore { get; set; }
+        public int KeyLength { get; set; } = 1024;
+        public bool IsCachingSignedCertificates { get; set; }
+
         public X509Certificate2 Authority { get; private set; }
 
+        public CertificateManager()
+            : this("Eavesdrop")
+        { }
+        public CertificateManager(string issuer)
+            : this(issuer, $"{issuer} Root Certificate Authority", StoreLocation.CurrentUser)
+        { }
         public CertificateManager(string issuer, string certificateAuthorityName)
+            : this(issuer, certificateAuthorityName, StoreLocation.CurrentUser)
+        { }
+        public CertificateManager(string issuer, string certificateAuthorityName, StoreLocation location)
         {
+            _myStore = new X509Store(StoreName.My, location);
+            _rootStore = new X509Store(StoreName.Root, location);
             _certificateCache = new Dictionary<string, X509Certificate2>();
 
-            Issuer = issuer;
-            CertificateEngine = new WindowsCertificateEngine();
-            CertificateAuthorityName = certificateAuthorityName;
+            NotBefore = DateTime.Now;
+            NotAfter = NotBefore.AddMonths(1);
 
-            MyStore = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-            RootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+            Issuer = issuer;
+            CertificateAuthorityName = certificateAuthorityName;
         }
 
         public bool CreateTrustedRootCertificate()
         {
-            return (Authority = InstallCertificate(RootStore, CertificateAuthorityName)) != null;
+            return (Authority = InstallCertificate(_rootStore, CertificateAuthorityName)) != null;
         }
         public bool DestroyTrustedRootCertificate()
         {
-            return DestroyCertificates(RootStore);
+            return DestroyCertificates(_rootStore);
         }
         public bool ExportTrustedRootCertificate(string path)
         {
-            X509Certificate2 rootCertificate = InstallCertificate(RootStore, CertificateAuthorityName);
+            X509Certificate2 rootCertificate = InstallCertificate(_rootStore, CertificateAuthorityName);
 
             path = Path.GetFullPath(path);
             if (rootCertificate != null)
@@ -52,10 +65,6 @@ namespace Eavesdrop.Certificates
             return File.Exists(path);
         }
 
-        public X509Certificate2Collection FindCertificates(string subjectName)
-        {
-            return FindCertificates(MyStore, subjectName);
-        }
         protected virtual X509Certificate2Collection FindCertificates(X509Store store, string subjectName)
         {
             X509Certificate2Collection certificates = store.Certificates
@@ -66,7 +75,43 @@ namespace Eavesdrop.Certificates
 
         public X509Certificate2 GenerateCertificate(string certificateName)
         {
-            return InstallCertificate(MyStore, certificateName);
+            return InstallCertificate(_myStore, certificateName);
+        }
+        public X509Certificate2 CreateCertificate(string subjectName, string alternateName)
+        {
+            using (var rsa = Authority == null
+                ? new RSACryptoServiceProvider(KeyLength)
+                : new RSACryptoServiceProvider(KeyLength, new CspParameters(1, "Microsoft Base Cryptographic Provider v1.0", Guid.NewGuid().ToString())))
+            {
+                var certificateRequest = new CertificateRequest(subjectName, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                if (Authority == null)
+                {
+                    certificateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                    certificateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(certificateRequest.PublicKey, false));
+
+                    using (X509Certificate2 certificate = certificateRequest.CreateSelfSigned(NotBefore.ToUniversalTime(), NotAfter.ToUniversalTime()))
+                    {
+                        certificate.FriendlyName = alternateName;
+                        return new X509Certificate2(certificate.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+                    }
+                }
+                else
+                {
+                    var sanBuilder = new SubjectAlternativeNameBuilder();
+                    sanBuilder.AddDnsName(alternateName);
+
+                    certificateRequest.CertificateExtensions.Add(sanBuilder.Build());
+                    certificateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+                    certificateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(certificateRequest.PublicKey, false));
+
+                    using (X509Certificate2 certificate = certificateRequest.Create(Authority, Authority.NotBefore, Authority.NotAfter, Guid.NewGuid().ToByteArray()))
+                    using (X509Certificate2 certificateWithPrivateKey = certificate.CopyWithPrivateKey(rsa))
+                    {
+                        certificateWithPrivateKey.FriendlyName = alternateName;
+                        return new X509Certificate2(certificateWithPrivateKey.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+                    }
+                }
+            }
         }
         protected virtual X509Certificate2 InstallCertificate(X509Store store, string certificateName)
         {
@@ -102,10 +147,10 @@ namespace Eavesdrop.Certificates
 
                     if (certificate == null)
                     {
-                        certificate = CertificateEngine.CreateCertificate(subjectName, certificateName, Authority);
+                        certificate = CreateCertificate(subjectName, certificateName);
                         if (certificate != null)
                         {
-                            if (store == RootStore || IsStoringPersonalCertificates)
+                            if (store == _rootStore || IsCachingSignedCertificates)
                             {
                                 store.Add(certificate);
                             }
@@ -128,8 +173,8 @@ namespace Eavesdrop.Certificates
 
         public void DestroyCertificates()
         {
-            DestroyCertificates(MyStore);
-            DestroyCertificates(RootStore);
+            DestroyCertificates(_myStore);
+            DestroyCertificates(_rootStore);
         }
         public bool DestroyCertificates(X509Store store)
         {
@@ -163,8 +208,8 @@ namespace Eavesdrop.Certificates
         {
             if (disposing)
             {
-                MyStore.Close();
-                RootStore.Close();
+                _myStore.Close();
+                _rootStore.Close();
             }
         }
     }

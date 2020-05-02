@@ -13,8 +13,6 @@ using System.Security.Authentication;
 using System.Text.RegularExpressions;
 using System.Security.Cryptography.X509Certificates;
 
-using Eavesdrop.Certificates;
-
 namespace Eavesdrop.Network
 {
     public class EavesNode : IDisposable
@@ -200,7 +198,7 @@ namespace Eavesdrop.Network
                 }
             }
             catch (EndOfStreamException) { line += "\r\n"; }
-            return line.Substring(0, line.Length - 2);
+            return line[0..^2];
         }
         private bool SecureTunnel(string host)
         {

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 
 using Eavesdrop.Network;
-using Eavesdrop.Certificates;
 
 namespace Eavesdrop
 {
@@ -72,7 +71,7 @@ namespace Eavesdrop
         }
         public static void Initiate(int port, Interceptors interceptors)
         {
-            Initiate(port, Interceptors.Default, true);
+            Initiate(port, interceptors, true);
         }
         public static void Initiate(int port, Interceptors interceptors, bool setSystemProxy)
         {
