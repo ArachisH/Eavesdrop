@@ -171,11 +171,6 @@ namespace Eavesdrop
             }
         }
 
-        public void DestroyCertificates()
-        {
-            DestroyCertificates(_myStore);
-            DestroyCertificates(_rootStore);
-        }
         public bool DestroyCertificates(X509Store store)
         {
             lock (store)
@@ -199,11 +194,9 @@ namespace Eavesdrop
                 finally { store.Close(); }
             }
         }
+        public bool DestroyCertificates() => DestroyCertificates(_myStore) && DestroyCertificates(_rootStore);
 
-        public void Dispose()
-        {
-            Dispose(true);
-        }
+        public void Dispose() => Dispose(true);
         protected virtual void Dispose(bool disposing)
         {
             if (disposing)
