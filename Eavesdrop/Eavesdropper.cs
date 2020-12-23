@@ -141,6 +141,12 @@ namespace Eavesdrop
                 }
 
                 if (response == null) return;
+                if (request is not WebRequest)
+                {
+                    // Ensure this response is accepted by the client.
+                    response.Headers["access-control-allow-origin"] = "*";
+                }
+
                 HttpContent responseContent = null;
                 var responseArgs = new ResponseInterceptedEventArgs(request, response);
                 try
