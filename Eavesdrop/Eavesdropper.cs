@@ -141,7 +141,7 @@ namespace Eavesdrop
                 }
 
                 if (response == null) return;
-                if (request is not WebRequest)
+                if (request is FileWebRequest)
                 {
                     // Ensure this response is accepted by the client.
                     response.Headers["access-control-allow-origin"] = "*";
