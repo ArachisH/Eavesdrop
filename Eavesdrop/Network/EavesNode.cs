@@ -1,355 +1,271 @@
-﻿using System;
-using System.IO;
-using System.Net;
+﻿using System.Net;
 using System.Text;
-using System.Net.Http;
+using System.Buffers;
 using System.Net.Sockets;
 using System.Net.Security;
-using System.Globalization;
-using System.IO.Compression;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 using System.Security.Authentication;
-using System.Text.RegularExpressions;
 using System.Security.Cryptography.X509Certificates;
 
-namespace Eavesdrop.Network
+using Eavesdrop.Network.HTTP;
+
+namespace Eavesdrop.Network;
+
+public sealed class EavesNode : IDisposable
 {
-    public class EavesNode : IDisposable
+    private const short MINIMUM_HTTP_BUFFER_SIZE = 1024;
+
+    private static readonly HttpMethod _connectMethod;
+    private static readonly HttpResponseMessage _okResponse;
+    private static readonly byte[] _eolBytes = new byte[2] { (byte)'\r', (byte)'\n' };
+    private static readonly byte[] _eofBytes = new byte[4] { (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' };
+    private static readonly byte[] _connectBytes = new byte[7] { (byte)'C', (byte)'O', (byte)'N', (byte)'N', (byte)'E', (byte)'C', (byte)'T' };
+
+    private readonly Socket _client;
+    private readonly CertificateManager _certifier;
+
+    private bool _disposed;
+    private Stream _stream;
+
+    public bool IsSecure { get; private set; }
+
+    static EavesNode()
     {
-        private SslStream _secureStream;
-        private readonly TcpClient _client;
-        private readonly CertificateManager _certifier;
-        private static readonly Regex _responseCookieSplitter;
+        _connectMethod = new HttpMethod("CONNECT");
+        _okResponse = new HttpResponseMessage(HttpStatusCode.OK);
+    }
+    public EavesNode(Socket client, CertificateManager certifier)
+    {
+        _client = client;
+        _certifier = certifier;
 
-        public bool IsSecure => (_secureStream != null);
+        _client.NoDelay = true;
+        _stream = new NetworkStream(client, FileAccess.ReadWrite, true);
+    }
 
-        static EavesNode()
+    public async Task<HttpRequestMessage> ReceiveHTTPRequestAsync()
+    {
+        using var firstBufferedHTTPSegment = new BufferedHTTPSegment(MINIMUM_HTTP_BUFFER_SIZE, out Memory<byte> buffer);
+        BufferedHTTPSegment lastBufferedHTTPSegment = firstBufferedHTTPSegment;
+
+        Uri? baseUri = null;
+        HttpRequestMessage? request = null;
+        while (_client.Connected && _stream.CanRead && request == null)
         {
-            _responseCookieSplitter = new Regex(",(?! )");
-        }
-        public EavesNode(CertificateManager certifier, TcpClient client)
-        {
-            _client = client;
-            _certifier = certifier;
-
-            _client.NoDelay = true;
-        }
-
-        public Task<HttpWebRequest> ReadRequestAsync()
-        {
-            return ReadRequestAsync(null);
-        }
-        private async Task<HttpWebRequest> ReadRequestAsync(Uri baseUri)
-        {
-            var headers = new List<string>();
-            string requestUrl = baseUri?.OriginalString;
-
-            string command = ReadNonBufferedLine();
-            if (string.IsNullOrWhiteSpace(command)) return null;
-
-            if (string.IsNullOrWhiteSpace(command)) return null;
-            string[] values = command.Split(' ');
-
-            string method = values[0];
-            requestUrl += values[1];
-            while (_client.Connected)
+            int bytesRead = await _stream.ReadAsync(buffer).ConfigureAwait(false);
+            if (!TryParseHTTPRequest(firstBufferedHTTPSegment, lastBufferedHTTPSegment, baseUri, bytesRead, out request, out int unconsumedBytes))
             {
-                string header = ReadNonBufferedLine();
-                if (string.IsNullOrWhiteSpace(header)) break;
-
-                headers.Add(header);
+                lastBufferedHTTPSegment = lastBufferedHTTPSegment.Grow(MINIMUM_HTTP_BUFFER_SIZE, out buffer);
+                continue;
             }
 
-            if (method == "CONNECT")
+            if (request?.Method == _connectMethod && request.RequestUri != null)
             {
-                baseUri = new Uri("https://" + requestUrl);
-                await SendResponseAsync(HttpStatusCode.OK).ConfigureAwait(false);
+                await SendHTTPResponseAsync(_okResponse).ConfigureAwait(false);
 
-                if (!SecureTunnel(baseUri.Host)) return null;
-                return await ReadRequestAsync(baseUri).ConfigureAwait(false);
-            }
-            else return CreateRequest(method, headers, new Uri(requestUrl));
-        }
-
-        public async Task<ByteArrayContent> ReadRequestContentAsync(WebRequest request)
-        {
-            byte[] payload = await GetPayload(GetStream(), request.ContentLength).ConfigureAwait(false);
-            if (payload == null) return null;
-
-            if (request.Headers[HttpRequestHeader.ContentEncoding] == "br")
-            {
-                request.Headers[HttpRequestHeader.ContentEncoding] = ""; // No longer encoded.
-
-                using (var output = new MemoryStream(payload.Length)) // At least...
+                X509Certificate2? certificate = _certifier.GenerateCertificate(request.RequestUri.DnsSafeHost);
+                if (certificate == null)
                 {
-                    using (var decoder = new BrotliStream(new MemoryStream(payload), CompressionMode.Decompress))
-                    {
-                        await decoder.CopyToAsync(output).ConfigureAwait(false);
-                    }
-                    await output.FlushAsync().ConfigureAwait(false);
-                    payload = output.ToArray();
+                    throw new NullReferenceException($"Failed to generate a self-signed certificate for '{request.RequestUri.DnsSafeHost}'.");
                 }
-            }
-            return new ByteArrayContent(payload);
-        }
-        public async Task WriteRequestContentAsync(WebRequest request, HttpContent content)
-        {
-            byte[] payload;
-            if (content is StreamContent)
-            {
-                // TODO
-                throw new NotSupportedException();
-            }
-            else payload = await content.ReadAsByteArrayAsync().ConfigureAwait(false);
 
-            if (request.Headers[HttpRequestHeader.ContentEncoding] == "br")
-            {
-                byte[] encoded = new byte[BrotliEncoder.GetMaxCompressedLength(payload.Length)];
-                if (BrotliEncoder.TryCompress(payload, encoded, out int bytesWritten))
-                {
-                    payload = new byte[bytesWritten];
-                    Buffer.BlockCopy(encoded, 0, payload, 0, bytesWritten);
-                }
-            }
+                var secureStream = new SslStream(_stream);
+                secureStream.AuthenticateAsServer(certificate, false, SslProtocols.None, false);
+                _stream = secureStream;
 
-            request.ContentLength = payload.Length;
-            using (Stream output = await request.GetRequestStreamAsync().ConfigureAwait(false))
+                baseUri = request.RequestUri;
+                request.Dispose();
+                request = null;
+
+                firstBufferedHTTPSegment.Collapse();
+                lastBufferedHTTPSegment = firstBufferedHTTPSegment;
+            }
+            else if (unconsumedBytes > 0 && request?.Content != null)
             {
-                await output.WriteAsync(payload, 0, payload.Length).ConfigureAwait(false);
+                int unconsumedStart = buffer.Length - unconsumedBytes;
+                ReadOnlyMemory<byte> unconsumed = lastBufferedHTTPSegment.Memory.Slice(unconsumedStart, bytesRead - unconsumedStart);
+                await BufferHTTPRequestContentAsync(request, unconsumed, _stream).ConfigureAwait(false);
             }
         }
 
-        public Task SendResponseAsync(WebResponse response, HttpContent content)
+        return request ?? throw new NullReferenceException("Failed to parse the HTTP request.");
+    }
+    public async Task SendHTTPResponseAsync(HttpResponseMessage response)
+    {
+        using var responseWriter = new HTTPResponseWriter(MINIMUM_HTTP_BUFFER_SIZE);
+
+        Encoding.UTF8.GetBytes($"HTTP/{response.Version.ToString(2)} {(int)response.StatusCode} {response.ReasonPhrase}", responseWriter);
+        responseWriter.AppendLine();
+
+        if (response.Content != null && response.Content != _okResponse.Content)
         {
-            string description = "OK";
-            var status = HttpStatusCode.OK;
-            if (response is HttpWebResponse httpResponse)
+            foreach ((string name, IEnumerable<string>? values) in response.Content.Headers)
             {
-                status = httpResponse.StatusCode;
-                description = httpResponse.StatusDescription;
-            }
-            return SendResponseAsync(status, description, response.Headers, content);
-        }
-        public Task SendResponseAsync(HttpStatusCode status, string description = null)
-        {
-            return SendResponseAsync(status, (description ?? status.ToString()), null, null);
-        }
-        public async Task SendResponseAsync(HttpStatusCode status, string description, WebHeaderCollection headers, HttpContent content)
-        {
-            var headerBuilder = new StringBuilder();
-            headerBuilder.AppendLine($"HTTP/{HttpVersion.Version10} {(int)status} {description}");
-            if (headers != null)
-            {
-                foreach (string header in headers.AllKeys)
-                {
-                    if (header == "Transfer-Encoding") continue;
-
-                    string value = headers[header];
-                    if (string.IsNullOrWhiteSpace(value)) continue;
-
-                    if (header.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
-                    {
-                        foreach (string setCookie in _responseCookieSplitter.Split(value))
-                        {
-                            headerBuilder.AppendLine($"{header}: {setCookie}");
-                        }
-                    }
-                    else headerBuilder.AppendLine($"{header}: {value}");
-                }
-            }
-            headerBuilder.AppendLine();
-
-            byte[] headerData = Encoding.UTF8.GetBytes(headerBuilder.ToString());
-            await GetStream().WriteAsync(headerData, 0, headerData.Length).ConfigureAwait(false);
-            if (content != null)
-            {
-                // TODO: If the Content-Encoding header has been changed, re-compress while writing?
-                Stream input = await content.ReadAsStreamAsync().ConfigureAwait(false);
-
-                var buffer = new byte[8192];
-                do
-                {
-                    int bytesRead = await input.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-                    if (_client.Connected && bytesRead > 0)
-                    {
-                        await GetStream().WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
-                    }
-                    else return;
-                }
-                while (input.CanRead && _client.Connected);
+                Encoding.UTF8.GetBytes($"{name}: ", responseWriter);
+                Encoding.UTF8.GetBytes(string.Join("; ", values), responseWriter);
+                responseWriter.AppendLine();
             }
         }
 
-        public Stream GetStream()
+        foreach ((string name, IEnumerable<string>? values) in response.Headers)
         {
-            return ((Stream)_secureStream ?? _client.GetStream());
+            Encoding.UTF8.GetBytes($"{name}: ", responseWriter);
+            Encoding.UTF8.GetBytes(string.Join("; ", values), responseWriter);
+            responseWriter.AppendLine();
         }
 
-        private string ReadNonBufferedLine()
+        responseWriter.AppendLine();
+        await responseWriter.WriteToAsync(_stream).ConfigureAwait(false);
+        if (response.Content == null || response.Content == _okResponse.Content) return;
+
+        if (response.Headers.TransferEncodingChunked == true)
         {
-            string line = string.Empty;
-            try
-            {
-                using (var binaryInput = new BinaryReader(GetStream(), Encoding.UTF8, true))
-                {
-                    do { line += binaryInput.ReadChar(); }
-                    while (!line.EndsWith("\r\n"));
-                }
-            }
-            catch (EndOfStreamException) { line += "\r\n"; }
-            return line[0..^2];
-        }
-        private bool SecureTunnel(string host)
-        {
-            try
-            {
-                X509Certificate2 certificate = _certifier.GenerateCertificate(host);
+            using Stream chunkedEncodingStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            using IMemoryOwner<byte> chunkedBufferOwner = MemoryPool<byte>.Shared.Rent(MINIMUM_HTTP_BUFFER_SIZE);
 
-                _secureStream = new SslStream(GetStream());
-                _secureStream.AuthenticateAsServer(certificate, false, SslProtocols.Tls12 | SslProtocols.Tls11 | SslProtocols.Tls, false);
+            var chunkHeadBuffer = new byte[6];
+            chunkHeadBuffer[4] = (byte)'\r';
+            chunkHeadBuffer[5] = (byte)'\n';
 
-                return true;
-            }
-            catch { return false; }
-        }
-        private IEnumerable<Cookie> GetCookies(string cookieHeader, string host)
-        {
-            foreach (string cookie in cookieHeader.Split(';'))
-            {
-                int nameEndIndex = cookie.IndexOf('=');
-                if (nameEndIndex == -1) continue;
-
-                string name = cookie.Substring(0, nameEndIndex).Trim();
-                string value = cookie.Substring(nameEndIndex + 1).Trim();
-
-                yield return new Cookie(name, value, "/", host);
-            }
-        }
-        private HttpWebRequest CreateRequest(string method, List<string> headers, Uri requestUri)
-        {
-            HttpWebRequest request = WebRequest.CreateHttp(requestUri);
-            request.ProtocolVersion = HttpVersion.Version10;
-            request.CookieContainer = new CookieContainer();
-            request.AllowAutoRedirect = false;
-            request.KeepAlive = false;
-            request.Method = method;
-            request.Proxy = null;
-
-            foreach (string header in headers)
-            {
-                int delimiterIndex = header.IndexOf(':');
-                if (delimiterIndex == -1) continue;
-
-                string name = header.Substring(0, delimiterIndex);
-                string value = header.Substring(delimiterIndex + 2);
-                switch (name.ToLower())
-                {
-                    case "range":
-                    case "expect":
-                    case "keep-alive":
-                    case "connection":
-                    case "proxy-connection": break;
-
-                    case "host": request.Host = value; break;
-                    case "accept": request.Accept = value; break;
-                    case "referer": request.Referer = value; break;
-                    case "user-agent": request.UserAgent = value; break;
-                    case "content-type": request.ContentType = value; break;
-                    case "date": request.Date = DateTime.Parse(value); break;
-
-                    case "content-length":
-                    {
-                        request.ContentLength =
-                            long.Parse(value, CultureInfo.InvariantCulture);
-
-                        break;
-                    }
-                    case "cookie":
-                    {
-                        foreach (Cookie cookie in GetCookies(value, request.Host))
-                        {
-                            try
-                            {
-                                request.CookieContainer.Add(cookie);
-                            }
-                            catch (CookieException) { }
-                        }
-                        request.Headers[name] = value;
-                        break;
-                    }
-                    case "if-modified-since":
-                    {
-                        request.IfModifiedSince = DateTime.Parse(
-                            value.Split(';')[0], CultureInfo.InvariantCulture);
-
-                        break;
-                    }
-
-                    default:
-                    request.Headers[name] = value; break;
-                }
-            }
-            return request;
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-        }
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                GetStream().Dispose();
-                _client.Dispose();
-            }
-        }
-
-        public static StreamContent ReadResponseContent(WebResponse response)
-        {
-            if (response.ContentLength == 0)
-            {
-                response.GetResponseStream().Dispose();
-                return null;
-            }
-
-            Stream input = response.GetResponseStream();
-            if (response is HttpWebResponse httpResponse && !string.IsNullOrWhiteSpace(httpResponse.ContentEncoding))
-            {
-                switch (httpResponse.ContentEncoding)
-                {
-                    case "br": input = new BrotliStream(input, CompressionMode.Decompress); break;
-                    case "gzip": input = new GZipStream(input, CompressionMode.Decompress); break;
-                    case "deflate": input = new DeflateStream(input, CompressionMode.Decompress); break;
-                }
-                response.Headers.Remove(HttpResponseHeader.ContentLength);
-                response.Headers.Remove(HttpResponseHeader.ContentEncoding);
-                response.Headers.Add(HttpResponseHeader.TransferEncoding, "chunked");
-            }
-            return new StreamContent(input, response.ContentLength > 0 ? (int)response.ContentLength : 4096);
-        }
-        public static async Task<byte[]> GetPayload(Stream input, long length)
-        {
-            if (length < 1) return null;
-
-            int totalBytesRead = 0;
-            int nullBytesReadCount = 0;
-            var payload = new byte[length];
+            int bytesRead = 0;
+            Memory<byte> chunkedBuffer = chunkedBufferOwner.Memory;
             do
             {
-                int bytesLeft = (payload.Length - totalBytesRead);
-                int bytesRead = await input.ReadAsync(payload, totalBytesRead, bytesLeft).ConfigureAwait(false);
+                bytesRead = await chunkedEncodingStream.ReadAsync(chunkedBuffer).ConfigureAwait(false);
+
+                int hexWritten = Encoding.UTF8.GetBytes(bytesRead.ToString("X"), chunkHeadBuffer);
+                await _stream.WriteAsync(chunkHeadBuffer, 0, hexWritten).ConfigureAwait(false);
+                await _stream.WriteAsync(chunkHeadBuffer, 4, 2).ConfigureAwait(false);
 
                 if (bytesRead > 0)
                 {
-                    nullBytesReadCount = 0;
-                    totalBytesRead += bytesRead;
+                    await _stream.WriteAsync(chunkedBuffer.Slice(0, bytesRead)).ConfigureAwait(false);
                 }
-                else if (++nullBytesReadCount >= 2) return null;
+                await _stream.WriteAsync(chunkHeadBuffer, 4, 2).ConfigureAwait(false);
             }
-            while (totalBytesRead != payload.Length);
-            return payload;
+            while (bytesRead > 0);
         }
+        else await response.Content.CopyToAsync(_stream).ConfigureAwait(false);
+
+        await _stream.FlushAsync().ConfigureAwait(false);
+    }
+
+    private static async Task BufferHTTPRequestContentAsync(HttpRequestMessage request, ReadOnlyMemory<byte> bufferedContent, Stream stream)
+    {
+        if (request.Content == null)
+        {
+            throw new NullReferenceException("The content property of the request message is null.");
+        }
+
+        int minBufferSize = (int)(request.Content.Headers.ContentLength ?? 512);
+        var content = new BufferedHTTPContent(minBufferSize);
+        foreach ((string name, IEnumerable<string>? values) in request.Content.Headers)
+        {
+            content.Headers.Add(name, values);
+        }
+
+        request.Content?.Dispose();
+        request.Content = content;
+
+        int totalBytesRead = 0;
+        if (bufferedContent.Length > 0)
+        {
+            bufferedContent.CopyTo(content.Memory);
+            totalBytesRead += bufferedContent.Length;
+        }
+
+        while (totalBytesRead < minBufferSize)
+        {
+            Memory<byte> unusedMemory = content.Memory.Slice(totalBytesRead);
+            totalBytesRead += await stream.ReadAsync(unusedMemory).ConfigureAwait(false);
+        }
+    }
+    private static bool TryParseHTTPRequest(BufferedHTTPSegment first, BufferedHTTPSegment last, Uri? baseUri, int lastBytesRead, out HttpRequestMessage? request, out int unconsumedBytes)
+    {
+        request = null;
+        unconsumedBytes = 0;
+        ReadOnlySpan<byte> httpSpan = null, httpHeadersSpan = null;
+
+        if (first == last)
+        {
+            httpSpan = first.Memory.Span;
+
+            // Find the EOF bytes.
+            int eofStart = httpSpan.IndexOf(_eofBytes);
+
+            // More segments are required to complete the HTTP request as no EOF bytes were found.
+            if (eofStart == -1) return false;
+
+            httpHeadersSpan = httpSpan.Slice(0, eofStart);
+            unconsumedBytes = httpSpan.Length - eofStart - _eofBytes.Length;
+        }
+        else // This will allocate a buffer to place the merged span on. 
+        {
+            // TODO: Manually enumerate the memory segments to construct the HTTP request.
+            var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(first, 0, last, last.Memory.Length));
+
+            // No segments contain the EOF bytes, continue to read more data.
+            if (!reader.TryReadTo(out httpHeadersSpan, _eofBytes, true)) return false;
+
+            unconsumedBytes = (int)reader.Remaining;
+        }
+
+        // Parse HTTP Method/Uri
+        int uriStart = httpHeadersSpan.IndexOf((byte)' ') + 1;
+        int uriEnd = httpHeadersSpan.Slice(uriStart).IndexOf((byte)' ');
+        string uri = Encoding.UTF8.GetString(httpHeadersSpan.Slice(uriStart, uriEnd));
+        string method = Encoding.UTF8.GetString(httpHeadersSpan.Slice(0, uriStart - 1));
+
+        request = new HttpRequestMessage
+        {
+            Method = httpHeadersSpan.StartsWith(_connectBytes) ? _connectMethod : new HttpMethod(method),
+            RequestUri = new Uri((httpHeadersSpan.StartsWith(_connectBytes) ? "https://" : baseUri?.GetLeftPart(UriPartial.Authority) ?? string.Empty) + uri)
+        };
+        if (request.Method == _connectMethod) return true;
+
+        // Parse HTTP Request Headers
+        httpHeadersSpan = httpHeadersSpan.Slice(httpHeadersSpan.IndexOf(_eolBytes) + _eolBytes.Length);
+        while (!httpHeadersSpan.IsEmpty)
+        {
+            int nameEnd = httpHeadersSpan.IndexOf((byte)':');
+            string name = Encoding.UTF8.GetString(httpHeadersSpan.Slice(0, nameEnd));
+            httpHeadersSpan = httpHeadersSpan.Slice(nameEnd + 2);
+
+            int valueEnd = httpHeadersSpan.IndexOf(_eolBytes);
+            if (valueEnd == -1)
+            {
+                valueEnd = httpHeadersSpan.Length;
+            }
+            string value = Encoding.UTF8.GetString(httpHeadersSpan.Slice(0, valueEnd));
+            httpHeadersSpan = httpHeadersSpan.Slice(valueEnd + (valueEnd == httpHeadersSpan.Length ? 0 : _eolBytes.Length));
+
+            if (name.StartsWith("content-", StringComparison.OrdinalIgnoreCase))
+            {
+                if (request.Content == null)
+                {
+                    request.Content = new UnbufferedHTTPContent();
+                }
+                request.Content.Headers.Add(name, value);
+            }
+            else
+            {
+                bool isConnectionHeader = name.Equals("connection", StringComparison.OrdinalIgnoreCase) || name.Equals("proxy-connection", StringComparison.OrdinalIgnoreCase);
+                bool isRequestingKeepAlive = value.Equals("keep-alive", StringComparison.OrdinalIgnoreCase);
+                if (!isConnectionHeader || !isRequestingKeepAlive)
+                {
+                    request.Headers.TryAddWithoutValidation(name, value);
+                }
+            }
+        }
+        return true;
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _stream.Dispose();
+        }
+        _disposed = true;
+        GC.SuppressFinalize(this);
     }
 }

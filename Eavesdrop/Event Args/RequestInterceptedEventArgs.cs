@@ -1,78 +1,29 @@
-﻿using System;
-using System.Net;
-using System.Net.Http;
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using System.Net.Http.Headers;
 
-namespace Eavesdrop
+namespace Eavesdrop;
+
+public sealed class RequestInterceptedEventArgs : CancelEventArgs
 {
-    public class RequestInterceptedEventArgs : CancelEventArgs
+    private readonly HttpRequestMessage _request;
+
+    public HttpMethod Method
     {
-        private HttpWebRequest _httpRequest;
+        get => _request.Method;
+        set => _request.Method = value;
+    }
+    public HttpContent? Content
+    {
+        get => _request.Content;
+        set => _request.Content = value;
+    }
 
-        public HttpContent Content { get; set; }
+    public Uri? Uri => _request.RequestUri;
+    public Version Version => _request.Version;
+    public HttpRequestHeaders Headers => _request.Headers;
 
-        private WebRequest _request;
-        public WebRequest Request
-        {
-            get => _request;
-            set
-            {
-                _request = value;
-                _httpRequest = (value as HttpWebRequest);
-            }
-        }
-
-        public Uri Uri => Request?.RequestUri;
-        public CookieContainer CookieContainer => _httpRequest?.CookieContainer;
-
-        public string Method
-        {
-            get => Request?.Method;
-            set
-            {
-                if (Request != null)
-                {
-                    Request.Method = value;
-                }
-            }
-        }
-        public IWebProxy Proxy
-        {
-            get => Request?.Proxy;
-            set
-            {
-                if (Request != null)
-                {
-                    Request.Proxy = value;
-                }
-            }
-        }
-        public string ContentType
-        {
-            get => Request?.ContentType;
-            set
-            {
-                if (Request != null)
-                {
-                    Request.ContentType = value;
-                }
-            }
-        }
-        public WebHeaderCollection Headers
-        {
-            get => Request?.Headers;
-            set
-            {
-                if (Request != null)
-                {
-                    Request.Headers = value;
-                }
-            }
-        }
-
-        public RequestInterceptedEventArgs(WebRequest request)
-        {
-            Request = request;
-        }
+    public RequestInterceptedEventArgs(HttpRequestMessage request)
+    {
+        _request = request;
     }
 }

@@ -1,14 +1,11 @@
-﻿using System;
+﻿namespace Eavesdrop;
 
-namespace Eavesdrop
+[Flags]
+public enum Interceptors
 {
-    [Flags]
-    public enum Interceptors
-    {
-        None = 0,
-        HTTP = 1,
-        HTTPS = 2,
+    None = 0,
+    HTTP = 1,
+    HTTPS = 2,
 
-        Default = (HTTP | HTTPS)
-    }
+    Default = (HTTP | HTTPS)
 }

@@ -1,205 +1,174 @@
-﻿using System;
-using System.Net;
-using System.Net.Http;
+﻿using System.Net;
 using System.Net.Sockets;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 
 using Eavesdrop.Network;
 
-namespace Eavesdrop
+namespace Eavesdrop;
+
+public static class Eavesdropper
 {
-    public static class Eavesdropper
+    private static readonly object _stateLock;
+    private static readonly HttpClient _httpClient;
+    private static readonly HttpClientHandler _httpClientHandler;
+
+    private static TcpListener? _listener;
+
+    public delegate Task AsyncEventHandler<TEventArgs>(object? sender, TEventArgs e);
+
+    public static event AsyncEventHandler<RequestInterceptedEventArgs>? RequestInterceptedAsync;
+    private static async Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e)
     {
-        private static TcpListener _listener;
-        private static readonly object _stateLock;
-
-        public delegate Task AsyncEventHandler<TEventArgs>(object sender, TEventArgs e);
-
-        public static event AsyncEventHandler<RequestInterceptedEventArgs> RequestInterceptedAsync;
-        private static async Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e)
+        Task? interceptedTask = RequestInterceptedAsync?.Invoke(null, e);
+        if (interceptedTask != null)
         {
-            Task interceptedTask = RequestInterceptedAsync?.Invoke(null, e);
-            if (interceptedTask != null)
+            await interceptedTask;
+        }
+    }
+
+    public static event AsyncEventHandler<ResponseInterceptedEventArgs>? ResponseInterceptedAsync;
+    private static async Task OnResponseInterceptedAsync(ResponseInterceptedEventArgs e)
+    {
+        Task? interceptedTask = ResponseInterceptedAsync?.Invoke(null, e);
+        if (interceptedTask != null)
+        {
+            await interceptedTask;
+        }
+    }
+
+    public static bool IsRunning { get; private set; }
+    public static CertificateManager Certifier { get; set; }
+
+    static Eavesdropper()
+    {
+        _stateLock = new object();
+        _httpClientHandler = new HttpClientHandler { UseProxy = false };
+        _httpClient = new HttpClient(_httpClientHandler);
+
+        _httpClientHandler.AllowAutoRedirect = false;
+        _httpClientHandler.CheckCertificateRevocationList = false;
+        _httpClientHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+
+        Certifier = new CertificateManager("Eavesdrop", "Eavesdrop Root Certificate Authority");
+    }
+
+    public static void Terminate()
+    {
+        lock (_stateLock)
+        {
+            ResetMachineProxy();
+            IsRunning = false;
+
+            if (_listener != null)
             {
-                await interceptedTask;
+                _listener.Stop();
+                _listener = null;
             }
         }
-
-        public static event AsyncEventHandler<ResponseInterceptedEventArgs> ResponseInterceptedAsync;
-        private static async Task OnResponseInterceptedAsync(ResponseInterceptedEventArgs e)
+    }
+    public static void Initiate(int port)
+    {
+        Initiate(port, Interceptors.Default);
+    }
+    public static void Initiate(int port, Interceptors interceptors)
+    {
+        Initiate(port, interceptors, true);
+    }
+    public static void Initiate(int port, Interceptors interceptors, bool setSystemProxy)
+    {
+        lock (_stateLock)
         {
-            Task interceptedTask = ResponseInterceptedAsync?.Invoke(null, e);
-            if (interceptedTask != null)
+            _listener = new TcpListener(IPAddress.Any, port);
+            _listener.Start();
+
+            IsRunning = true;
+
+            Task.Factory.StartNew(InterceptRequestAsnync, TaskCreationOptions.LongRunning);
+            if (setSystemProxy)
             {
-                await interceptedTask;
+                SetMachineProxy(port, interceptors);
             }
         }
+    }
 
-        public static List<string> Overrides { get; }
-        public static bool IsRunning { get; private set; }
-        public static CertificateManager Certifier { get; set; }
-
-        static Eavesdropper()
+    public static void AddOverrides(params string[] domains)
+    {
+        foreach (string domain in domains)
         {
-            _stateLock = new object();
-
-            ServicePointManager.Expect100Continue = true;
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-
-            Overrides = new List<string>();
-            Certifier = new CertificateManager("Eavesdrop", "Eavesdrop Root Certificate Authority");
+            INETOptions.Overrides.Add(domain);
         }
+    }
 
-        public static void Terminate()
-        {
-            lock (_stateLock)
-            {
-                ResetMachineProxy();
-                IsRunning = false;
-
-                if (_listener != null)
-                {
-                    _listener.Stop();
-                    _listener = null;
-                }
-            }
-        }
-        public static void Initiate(int port)
-        {
-            Initiate(port, Interceptors.Default);
-        }
-        public static void Initiate(int port, Interceptors interceptors)
-        {
-            Initiate(port, interceptors, true);
-        }
-        public static void Initiate(int port, Interceptors interceptors, bool setSystemProxy)
-        {
-            lock (_stateLock)
-            {
-                Terminate();
-
-                _listener = new TcpListener(IPAddress.Any, port);
-                _listener.Start();
-
-                IsRunning = true;
-
-                Task.Factory.StartNew(InterceptRequestAsnync, TaskCreationOptions.LongRunning);
-                if (setSystemProxy)
-                {
-                    SetMachineProxy(port, interceptors);
-                }
-            }
-        }
-
-        private static async Task InterceptRequestAsnync()
+    private static async Task InterceptRequestAsnync()
+    {
+        try
         {
             while (IsRunning && _listener != null)
             {
-                try
-                {
-                    TcpClient client = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
-                    Task handleClientAsync = HandleClientAsync(client);
-                }
-                catch (ObjectDisposedException) { }
+                Socket client = await _listener.AcceptSocketAsync().ConfigureAwait(false);
+                _ = HandleClientAsync(client);
             }
         }
-        private static async Task HandleClientAsync(TcpClient client)
+        catch { /* Catch all exceptions. */ }
+    }
+    private static async Task HandleClientAsync(Socket client)
+    {
+        using var local = new EavesNode(client, Certifier);
+
+        HttpResponseMessage? response = null;
+        HttpContent? originalResponseContent = null;
+
+        HttpRequestMessage request = await local.ReceiveHTTPRequestAsync().ConfigureAwait(false);
+        HttpContent? originalRequestContent = request.Content;
+        try
         {
-            using (var local = new EavesNode(Certifier, client))
-            {
-                WebRequest request = await local.ReadRequestAsync().ConfigureAwait(false);
-                if (request == null) return;
+            var requestArgs = new RequestInterceptedEventArgs(request);
+            await OnRequestInterceptedAsync(requestArgs).ConfigureAwait(false);
+            if (requestArgs.Cancel) return;
 
-                HttpContent requestContent = null;
-                var requestArgs = new RequestInterceptedEventArgs(request);
-                try
-                {
-                    requestArgs.Content = requestContent = await local.ReadRequestContentAsync(request).ConfigureAwait(false);
-                    await OnRequestInterceptedAsync(requestArgs).ConfigureAwait(false);
-                    if (requestArgs.Cancel) return;
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+            originalResponseContent = response.Content;
 
-                    request = requestArgs.Request;
-                    if (requestArgs.Content != null)
-                    {
-                        await local.WriteRequestContentAsync(request, requestArgs.Content).ConfigureAwait(false);
-                    }
-                }
-                finally
-                {
-                    requestContent?.Dispose();
-                    requestArgs.Content?.Dispose();
-                }
+            var responseArgs = new ResponseInterceptedEventArgs(response);
+            await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
+            if (responseArgs.Cancel) return;
 
-                WebResponse response = null;
-                try { response = await request.GetResponseAsync().ConfigureAwait(false); }
-                catch (WebException ex) { response = ex.Response; }
-                catch (ProtocolViolationException)
-                {
-                    response?.Dispose();
-                    response = null;
-                }
-
-                if (response == null) return;
-                if (request is FileWebRequest)
-                {
-                    // Ensure this response is accepted by the client.
-                    response.Headers["access-control-allow-origin"] = "*";
-                }
-
-                HttpContent responseContent = null;
-                var responseArgs = new ResponseInterceptedEventArgs(request, response);
-                try
-                {
-                    responseArgs.Content = responseContent = EavesNode.ReadResponseContent(response);
-                    await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
-                    if (responseArgs.Cancel) return;
-
-                    await local.SendResponseAsync(responseArgs.Response, responseArgs.Content).ConfigureAwait(false);
-                }
-                finally
-                {
-                    response.Dispose();
-                    responseArgs.Response.Dispose();
-
-                    responseContent?.Dispose();
-                    responseArgs.Content?.Dispose();
-                }
-            }
+            await local.SendHTTPResponseAsync(response).ConfigureAwait(false);
         }
-
-        private static void ResetMachineProxy()
+        finally
         {
-            INETOptions.Overrides.Clear();
-            INETOptions.IsIgnoringLocalTraffic = false;
+            request.Dispose();
+            originalRequestContent?.Dispose();
 
-            INETOptions.HTTPAddress = null;
-            INETOptions.HTTPSAddress = null;
-            INETOptions.IsProxyEnabled = false;
-
-            INETOptions.Save();
+            response?.Dispose();
+            originalResponseContent?.Dispose();
         }
-        private static void SetMachineProxy(int port, Interceptors interceptors)
+    }
+
+    private static void ResetMachineProxy()
+    {
+        INETOptions.Overrides.Clear();
+        INETOptions.IsIgnoringLocalTraffic = false;
+
+        INETOptions.HTTPAddress = null;
+        INETOptions.HTTPSAddress = null;
+        INETOptions.IsProxyEnabled = false;
+
+        INETOptions.Save();
+    }
+    private static void SetMachineProxy(int port, Interceptors interceptors)
+    {
+        string address = "127.0.0.1:" + port;
+        if (interceptors.HasFlag(Interceptors.HTTP))
         {
-            foreach (string @override in Overrides)
-            {
-                if (INETOptions.Overrides.Contains(@override)) continue;
-                INETOptions.Overrides.Add(@override);
-            }
-
-            string address = ("127.0.0.1:" + port);
-            if (interceptors.HasFlag(Interceptors.HTTP))
-            {
-                INETOptions.HTTPAddress = address;
-            }
-            if (interceptors.HasFlag(Interceptors.HTTPS))
-            {
-                INETOptions.HTTPSAddress = address;
-            }
-            INETOptions.IsProxyEnabled = true;
-            INETOptions.IsIgnoringLocalTraffic = true;
-
-            INETOptions.Save();
+            INETOptions.HTTPAddress = address;
         }
+        if (interceptors.HasFlag(Interceptors.HTTPS))
+        {
+            INETOptions.HTTPSAddress = address;
+        }
+        INETOptions.IsProxyEnabled = true;
+        INETOptions.IsIgnoringLocalTraffic = true;
+
+        INETOptions.Save();
     }
 }
