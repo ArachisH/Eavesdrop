@@ -33,7 +33,7 @@ public class Program
             Console.WriteLine("    " + Encoding.UTF8.GetString(await e.Content.ReadAsByteArrayAsync()));
         }
     }
-    private static async Task Eavesdropper_ResponseInterceptedAsync(object sender, ResponseInterceptedEventArgs e)
+    private static Task Eavesdropper_ResponseInterceptedAsync(object sender, ResponseInterceptedEventArgs e)
     {
         Console.WriteLine("----[ HTTP Response ]");
         Console.WriteLine($"    {e.Uri} {e.Version}");
@@ -41,5 +41,6 @@ public class Program
         {
             Console.WriteLine($"    {item.Key}: {string.Join("; ", item.Value)}");
         }
+        return Task.CompletedTask;
     }
 }

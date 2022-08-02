@@ -156,7 +156,7 @@ public sealed class EavesNode : IDisposable
             throw new NullReferenceException("The content property of the request message is null.");
         }
 
-        int minBufferSize = (int)(request.Content.Headers.ContentLength ?? 512);
+        int minBufferSize = (int)(request.Content.Headers.ContentLength ?? MINIMUM_HTTP_BUFFER_SIZE);
         var content = new BufferedHTTPContent(minBufferSize);
         foreach ((string name, IEnumerable<string>? values) in request.Content.Headers)
         {
@@ -175,8 +175,7 @@ public sealed class EavesNode : IDisposable
 
         while (totalBytesRead < minBufferSize)
         {
-            Memory<byte> unusedMemory = content.Memory.Slice(totalBytesRead);
-            totalBytesRead += await stream.ReadAsync(unusedMemory).ConfigureAwait(false);
+            totalBytesRead += await stream.ReadAsync(content.Memory.Slice(totalBytesRead)).ConfigureAwait(false);
         }
     }
     private static bool TryParseHTTPRequest(BufferedHTTPSegment first, BufferedHTTPSegment last, Uri? baseUri, int lastBytesRead, out HttpRequestMessage? request, out int unconsumedBytes)
