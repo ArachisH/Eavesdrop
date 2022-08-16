@@ -3,7 +3,6 @@ using System.Text;
 using System.Buffers;
 using System.Net.Sockets;
 using System.Net.Security;
-using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
 using Eavesdrop.Network.Http;
@@ -14,11 +13,13 @@ public sealed class EavesNode : IDisposable
 {
     private const short MINIMUM_HTTP_BUFFER_SIZE = 1024;
 
-    private static readonly HttpMethod _connectMethod;
-    private static readonly HttpResponseMessage _okResponse;
-    private static readonly byte[] _eolBytes = new byte[2] { (byte)'\r', (byte)'\n' };
-    private static readonly byte[] _eofBytes = new byte[4] { (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' };
-    private static readonly byte[] _connectBytes = new byte[7] { (byte)'C', (byte)'O', (byte)'N', (byte)'N', (byte)'E', (byte)'C', (byte)'T' };
+    private static readonly HttpMethod _connectMethod = new("CONNECT");
+    private static readonly HttpResponseMessage _okResponse = new(HttpStatusCode.OK);
+
+    // TODO-FUTURE: In C# 11, use raw string literals
+    private static ReadOnlySpan<byte> _eolBytes => new byte[2] { (byte)'\r', (byte)'\n' };
+    private static ReadOnlySpan<byte> _eofBytes => new byte[4] { (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' };
+    private static ReadOnlySpan<byte> _connectBytes => new byte[7] { (byte)'C', (byte)'O', (byte)'N', (byte)'N', (byte)'E', (byte)'C', (byte)'T' };
 
     private readonly Socket _client;
     private readonly CertificateManager _certifier;
@@ -28,21 +29,16 @@ public sealed class EavesNode : IDisposable
 
     public bool IsSecure { get; private set; }
 
-    static EavesNode()
-    {
-        _connectMethod = new HttpMethod("CONNECT");
-        _okResponse = new HttpResponseMessage(HttpStatusCode.OK);
-    }
     public EavesNode(Socket client, CertificateManager certifier)
     {
         _client = client;
         _certifier = certifier;
 
         _client.NoDelay = true;
-        _stream = new NetworkStream(client, FileAccess.ReadWrite, true);
+        _stream = new NetworkStream(client, true);
     }
 
-    public async Task<HttpRequestMessage> ReceiveHttpRequestAsync()
+    public async Task<HttpRequestMessage> ReceiveHttpRequestAsync(CancellationToken cancellationToken = default)
     {
         using var firstBufferedHttpSegment = new BufferedHttpSegment(MINIMUM_HTTP_BUFFER_SIZE, out Memory<byte> buffer);
         BufferedHttpSegment lastBufferedHttpSegment = firstBufferedHttpSegment;
@@ -51,7 +47,7 @@ public sealed class EavesNode : IDisposable
         HttpRequestMessage? request = null;
         while (_client.Connected && _stream.CanRead && request == null)
         {
-            int bytesRead = await _stream.ReadAsync(buffer).ConfigureAwait(false);
+            int bytesRead = await _stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
             if (!TryParseHttpRequest(firstBufferedHttpSegment, lastBufferedHttpSegment, baseUri, bytesRead, out request, out int unconsumedBytes))
             {
                 lastBufferedHttpSegment = lastBufferedHttpSegment.Grow(MINIMUM_HTTP_BUFFER_SIZE, out buffer);
@@ -60,7 +56,7 @@ public sealed class EavesNode : IDisposable
 
             if (request?.Method == _connectMethod && request.RequestUri != null)
             {
-                await SendHttpResponseAsync(_okResponse).ConfigureAwait(false);
+                await SendHttpResponseAsync(_okResponse, cancellationToken).ConfigureAwait(false);
 
                 X509Certificate2? certificate = _certifier.GenerateCertificate(request.RequestUri.DnsSafeHost);
                 if (certificate == null)
@@ -68,9 +64,14 @@ public sealed class EavesNode : IDisposable
                     throw new NullReferenceException($"Failed to generate a self-signed certificate for '{request.RequestUri.DnsSafeHost}'.");
                 }
 
-                var secureStream = new SslStream(_stream);
-                secureStream.AuthenticateAsServer(certificate, false, SslProtocols.None, false);
-                _stream = secureStream;
+                var sslStream = new SslStream(_stream);
+                var sslOptions = new SslServerAuthenticationOptions()
+                {
+                    ServerCertificate = certificate
+                };
+
+                await sslStream.AuthenticateAsServerAsync(sslOptions, cancellationToken).ConfigureAwait(false);
+                _stream = sslStream;
 
                 baseUri = request.RequestUri;
                 request.Dispose();
@@ -83,13 +84,13 @@ public sealed class EavesNode : IDisposable
             {
                 int unconsumedStart = buffer.Length - unconsumedBytes;
                 ReadOnlyMemory<byte> unconsumed = lastBufferedHttpSegment.Memory.Slice(unconsumedStart, bytesRead - unconsumedStart);
-                await BufferHttpRequestContentAsync(request, unconsumed, _stream).ConfigureAwait(false);
+                await BufferHttpRequestContentAsync(request, unconsumed, _stream, cancellationToken).ConfigureAwait(false);
             }
         }
 
         return request ?? throw new NullReferenceException("Failed to parse the HTTP request.");
     }
-    public async Task SendHttpResponseAsync(HttpResponseMessage response)
+    public async Task SendHttpResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
         using var responseWriter = new HttpResponseWriter(MINIMUM_HTTP_BUFFER_SIZE);
 
@@ -114,12 +115,12 @@ public sealed class EavesNode : IDisposable
         }
 
         responseWriter.AppendLine();
-        await responseWriter.WriteToAsync(_stream).ConfigureAwait(false);
+        await responseWriter.WriteToAsync(_stream, cancellationToken).ConfigureAwait(false);
         if (response.Content == null || response.Content == _okResponse.Content) return;
 
         if (response.Headers.TransferEncodingChunked == true)
         {
-            using Stream chunkedEncodingStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            using Stream chunkedEncodingStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             using IMemoryOwner<byte> chunkedBufferOwner = MemoryPool<byte>.Shared.Rent(MINIMUM_HTTP_BUFFER_SIZE);
 
             var chunkHeadBuffer = new byte[6];
@@ -130,26 +131,26 @@ public sealed class EavesNode : IDisposable
             Memory<byte> chunkedBuffer = chunkedBufferOwner.Memory;
             do
             {
-                bytesRead = await chunkedEncodingStream.ReadAsync(chunkedBuffer).ConfigureAwait(false);
+                bytesRead = await chunkedEncodingStream.ReadAsync(chunkedBuffer, cancellationToken).ConfigureAwait(false);
 
                 int hexWritten = Encoding.UTF8.GetBytes(bytesRead.ToString("X"), chunkHeadBuffer);
-                await _stream.WriteAsync(chunkHeadBuffer, 0, hexWritten).ConfigureAwait(false);
-                await _stream.WriteAsync(chunkHeadBuffer, 4, 2).ConfigureAwait(false);
+                await _stream.WriteAsync(chunkHeadBuffer.AsMemory(0, hexWritten), cancellationToken).ConfigureAwait(false);
+                await _stream.WriteAsync(chunkHeadBuffer.AsMemory(4, 2), cancellationToken).ConfigureAwait(false);
 
                 if (bytesRead > 0)
                 {
-                    await _stream.WriteAsync(chunkedBuffer.Slice(0, bytesRead)).ConfigureAwait(false);
+                    await _stream.WriteAsync(chunkedBuffer.Slice(0, bytesRead), cancellationToken).ConfigureAwait(false);
                 }
-                await _stream.WriteAsync(chunkHeadBuffer, 4, 2).ConfigureAwait(false);
+                await _stream.WriteAsync(chunkHeadBuffer.AsMemory(4, 2), cancellationToken).ConfigureAwait(false);
             }
             while (bytesRead > 0);
         }
-        else await response.Content.CopyToAsync(_stream).ConfigureAwait(false);
+        else await response.Content.CopyToAsync(_stream, cancellationToken).ConfigureAwait(false);
 
-        await _stream.FlushAsync().ConfigureAwait(false);
+        await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task BufferHttpRequestContentAsync(HttpRequestMessage request, ReadOnlyMemory<byte> bufferedContent, Stream stream)
+    private static async Task BufferHttpRequestContentAsync(HttpRequestMessage request, ReadOnlyMemory<byte> bufferedContent, Stream stream, CancellationToken cancellationToken = default)
     {
         if (request.Content == null)
         {
@@ -175,7 +176,7 @@ public sealed class EavesNode : IDisposable
 
         while (totalBytesRead < minBufferSize)
         {
-            totalBytesRead += await stream.ReadAsync(content.Memory.Slice(totalBytesRead)).ConfigureAwait(false);
+            totalBytesRead += await stream.ReadAsync(content.Memory.Slice(totalBytesRead), cancellationToken).ConfigureAwait(false);
         }
     }
     private static bool TryParseHttpRequest(BufferedHttpSegment first, BufferedHttpSegment last, Uri? baseUri, int lastBytesRead, out HttpRequestMessage? request, out int unconsumedBytes)
@@ -239,10 +240,7 @@ public sealed class EavesNode : IDisposable
 
             if (name.StartsWith("content-", StringComparison.OrdinalIgnoreCase))
             {
-                if (request.Content == null)
-                {
-                    request.Content = new UnbufferedHttpContent();
-                }
+                request.Content ??= new UnbufferedHttpContent();
                 request.Content.Headers.Add(name, value);
             }
             else

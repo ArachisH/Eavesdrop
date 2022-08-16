@@ -10,28 +10,33 @@ public static class Eavesdropper
     private static readonly object _stateLock;
     private static readonly HttpClient _httpClient;
     private static readonly HttpClientHandler _httpClientHandler;
+    private static CancellationTokenSource _cancellationTokenSource;
 
-    private static TcpListener? _listener;
+    private static Socket? _listener;
 
     public delegate Task AsyncEventHandler<TEventArgs>(object? sender, TEventArgs e);
 
     public static event AsyncEventHandler<RequestInterceptedEventArgs>? RequestInterceptedAsync;
-    private static async Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e)
+    private static async Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e, CancellationToken cancellationToken)
     {
+        e.Cancel = cancellationToken.IsCancellationRequested;
+
         Task? interceptedTask = RequestInterceptedAsync?.Invoke(null, e);
         if (interceptedTask != null)
         {
-            await interceptedTask;
+            await interceptedTask.WaitAsync(cancellationToken);
         }
     }
 
     public static event AsyncEventHandler<ResponseInterceptedEventArgs>? ResponseInterceptedAsync;
-    private static async Task OnResponseInterceptedAsync(ResponseInterceptedEventArgs e)
+    private static async Task OnResponseInterceptedAsync(ResponseInterceptedEventArgs e, CancellationToken cancellationToken)
     {
+        e.Cancel = cancellationToken.IsCancellationRequested;
+
         Task? interceptedTask = ResponseInterceptedAsync?.Invoke(null, e);
         if (interceptedTask != null)
         {
-            await interceptedTask;
+            await interceptedTask.WaitAsync(cancellationToken);
         }
     }
 
@@ -58,11 +63,8 @@ public static class Eavesdropper
             ResetMachineProxy();
             IsRunning = false;
 
-            if (_listener != null)
-            {
-                _listener.Stop();
-                _listener = null;
-            }
+            _listener?.Close();
+            _listener = null;
         }
     }
     public static void Initiate(int port)
@@ -77,12 +79,13 @@ public static class Eavesdropper
     {
         lock (_stateLock)
         {
-            _listener = new TcpListener(IPAddress.Any, port);
-            _listener.Start();
+            _listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            _listener.Bind(new IPEndPoint(IPAddress.Any, port));
+            _listener.Listen();
 
             IsRunning = true;
 
-            Task.Factory.StartNew(InterceptRequestAsnync, TaskCreationOptions.LongRunning);
+            Task.Factory.StartNew(InterceptRequestAsync, TaskCreationOptions.LongRunning);
             if (setSystemProxy)
             {
                 SetMachineProxy(port, interceptors);
@@ -98,41 +101,41 @@ public static class Eavesdropper
         }
     }
 
-    private static async Task InterceptRequestAsnync()
+    private static async Task InterceptRequestAsync()
     {
         try
         {
             while (IsRunning && _listener != null)
             {
-                Socket client = await _listener.AcceptSocketAsync().ConfigureAwait(false);
+                Socket client = await _listener.AcceptAsync().ConfigureAwait(false);
                 _ = HandleClientAsync(client);
             }
         }
         catch { /* Catch all exceptions. */ }
     }
-    private static async Task HandleClientAsync(Socket client)
+    private static async Task HandleClientAsync(Socket client, CancellationToken cancellationToken = default)
     {
         using var local = new EavesNode(client, Certifier);
 
         HttpResponseMessage? response = null;
         HttpContent? originalResponseContent = null;
 
-        HttpRequestMessage request = await local.ReceiveHttpRequestAsync().ConfigureAwait(false);
+        HttpRequestMessage request = await local.ReceiveHttpRequestAsync(cancellationToken).ConfigureAwait(false);
         HttpContent? originalRequestContent = request.Content;
         try
         {
             var requestArgs = new RequestInterceptedEventArgs(request);
-            await OnRequestInterceptedAsync(requestArgs).ConfigureAwait(false);
-            if (requestArgs.Cancel) return;
+            await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
+            if (requestArgs.Cancel || cancellationToken.IsCancellationRequested) return;
 
-            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             originalResponseContent = response.Content;
 
             var responseArgs = new ResponseInterceptedEventArgs(response);
-            await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
-            if (responseArgs.Cancel) return;
+            await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
+            if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
 
-            await local.SendHttpResponseAsync(response).ConfigureAwait(false);
+            await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
