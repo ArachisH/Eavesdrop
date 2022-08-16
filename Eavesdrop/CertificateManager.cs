@@ -189,13 +189,12 @@ public sealed class CertificateManager : IDisposable
         return certificates.Count > 0 ? certificates : null;
     }
 
-    public void Dispose() => Dispose(true);
-    private void Dispose(bool disposing)
+    public void Dispose()
     {
-        if (disposing)
-        {
-            _myStore.Close();
-            _rootStore.Close();
-        }
+        _myStore.Close();
+        _rootStore.Close();
+
+        _myStore.Dispose();
+        _rootStore.Dispose();
     }
 }
