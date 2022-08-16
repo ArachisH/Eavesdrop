@@ -16,9 +16,11 @@ public sealed class EavesNode : IDisposable
 
     private static readonly HttpMethod _connectMethod;
     private static readonly HttpResponseMessage _okResponse;
-    private static readonly byte[] _eolBytes = new byte[2] { (byte)'\r', (byte)'\n' };
-    private static readonly byte[] _eofBytes = new byte[4] { (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' };
-    private static readonly byte[] _connectBytes = new byte[7] { (byte)'C', (byte)'O', (byte)'N', (byte)'N', (byte)'E', (byte)'C', (byte)'T' };
+    
+    // TODO-FUTURE: In C# 11 use raw string literals
+    private static ReadOnlySpan<byte> _eolBytes => new byte[2] { (byte)'\r', (byte)'\n' };
+    private static ReadOnlySpan<byte> _eofBytes => new byte[4] { (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' };
+    private static ReadOnlySpan<byte> _connectBytes => new byte[7] { (byte)'C', (byte)'O', (byte)'N', (byte)'N', (byte)'E', (byte)'C', (byte)'T' };
 
     private readonly Socket _client;
     private readonly CertificateManager _certifier;
