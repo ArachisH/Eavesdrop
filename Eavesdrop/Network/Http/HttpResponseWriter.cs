@@ -16,10 +16,10 @@ public sealed class HttpResponseWriter : IBufferWriter<byte>, IDisposable
         Memory = _bufferOwner.Memory;
     }
 
-    public async Task WriteToAsync(Stream stream)
+    public async Task WriteToAsync(Stream stream, CancellationToken cancellationToken = default)
     {
-        await stream.WriteAsync(Memory.Slice(0, Written)).ConfigureAwait(false);
-        await stream.FlushAsync().ConfigureAwait(false);
+        await stream.WriteAsync(Memory.Slice(0, Written), cancellationToken).ConfigureAwait(false);
+        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
         Written = 0;
     }
 
