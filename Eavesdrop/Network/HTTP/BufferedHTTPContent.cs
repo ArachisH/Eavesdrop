@@ -1,15 +1,15 @@
 ﻿using System.Net;
 using System.Buffers;
 
-namespace Eavesdrop.Network.HTTP;
+namespace Eavesdrop.Network.Http;
 
-public sealed class BufferedHTTPContent : HttpContent
+public sealed class BufferedHttpContent : HttpContent
 {
     private readonly IMemoryOwner<byte> _contentBufferOwner;
 
     public Memory<byte> Memory { get; }
 
-    public BufferedHTTPContent(int minBufferSize = -1)
+    public BufferedHttpContent(int minBufferSize = -1)
     {
         _contentBufferOwner = MemoryPool<byte>.Shared.Rent(minBufferSize);
 

@@ -117,7 +117,7 @@ public static class Eavesdropper
         HttpResponseMessage? response = null;
         HttpContent? originalResponseContent = null;
 
-        HttpRequestMessage request = await local.ReceiveHTTPRequestAsync().ConfigureAwait(false);
+        HttpRequestMessage request = await local.ReceiveHttpRequestAsync().ConfigureAwait(false);
         HttpContent? originalRequestContent = request.Content;
         try
         {
@@ -132,7 +132,7 @@ public static class Eavesdropper
             await OnResponseInterceptedAsync(responseArgs).ConfigureAwait(false);
             if (responseArgs.Cancel) return;
 
-            await local.SendHTTPResponseAsync(response).ConfigureAwait(false);
+            await local.SendHttpResponseAsync(response).ConfigureAwait(false);
         }
         finally
         {
@@ -149,8 +149,8 @@ public static class Eavesdropper
         INETOptions.Overrides.Clear();
         INETOptions.IsIgnoringLocalTraffic = false;
 
-        INETOptions.HTTPAddress = null;
-        INETOptions.HTTPSAddress = null;
+        INETOptions.HttpAddress = null;
+        INETOptions.HttpsAddress = null;
         INETOptions.IsProxyEnabled = false;
 
         INETOptions.Save();
@@ -160,11 +160,11 @@ public static class Eavesdropper
         string address = "127.0.0.1:" + port;
         if (interceptors.HasFlag(Interceptors.HTTP))
         {
-            INETOptions.HTTPAddress = address;
+            INETOptions.HttpAddress = address;
         }
         if (interceptors.HasFlag(Interceptors.HTTPS))
         {
-            INETOptions.HTTPSAddress = address;
+            INETOptions.HttpsAddress = address;
         }
         INETOptions.IsProxyEnabled = true;
         INETOptions.IsIgnoringLocalTraffic = true;
