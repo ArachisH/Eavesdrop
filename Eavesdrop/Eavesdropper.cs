@@ -11,7 +11,7 @@ public static class Eavesdropper
     private static readonly HttpClient _httpClient;
     private static readonly HttpClientHandler _httpClientHandler;
 
-    private static TcpListener? _listener;
+    private static Socket? _listener;
 
     public delegate Task AsyncEventHandler<TEventArgs>(object? sender, TEventArgs e);
 
@@ -58,11 +58,8 @@ public static class Eavesdropper
             ResetMachineProxy();
             IsRunning = false;
 
-            if (_listener != null)
-            {
-                _listener.Stop();
-                _listener = null;
-            }
+            _listener?.Close();
+            _listener = null;
         }
     }
     public static void Initiate(int port)
@@ -77,12 +74,13 @@ public static class Eavesdropper
     {
         lock (_stateLock)
         {
-            _listener = new TcpListener(IPAddress.Any, port);
-            _listener.Start();
+            _listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            _listener.Bind(new IPEndPoint(IPAddress.Any, port));
+            _listener.Listen();
 
             IsRunning = true;
 
-            Task.Factory.StartNew(InterceptRequestAsnync, TaskCreationOptions.LongRunning);
+            Task.Factory.StartNew(InterceptRequestAsync, TaskCreationOptions.LongRunning);
             if (setSystemProxy)
             {
                 SetMachineProxy(port, interceptors);
@@ -98,13 +96,13 @@ public static class Eavesdropper
         }
     }
 
-    private static async Task InterceptRequestAsnync()
+    private static async Task InterceptRequestAsync()
     {
         try
         {
             while (IsRunning && _listener != null)
             {
-                Socket client = await _listener.AcceptSocketAsync().ConfigureAwait(false);
+                Socket client = await _listener.AcceptAsync().ConfigureAwait(false);
                 _ = HandleClientAsync(client);
             }
         }
