@@ -34,7 +34,7 @@ public sealed class HttpResponseWriter : IBufferWriter<byte>, IDisposable
             _bufferOwner.Dispose();
             _bufferOwner = bufferOwner;
         }
-        return Memory.Slice(Written).Span;
+        return Memory.Span.Slice(Written);
     }
     public void Advance(int count) => Written += count;
     public Memory<byte> GetMemory(int sizeHint = 0) => throw new NotImplementedException();

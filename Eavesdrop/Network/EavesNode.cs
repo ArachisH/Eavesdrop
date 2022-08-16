@@ -14,10 +14,10 @@ public sealed class EavesNode : IDisposable
 {
     private const short MINIMUM_HTTP_BUFFER_SIZE = 1024;
 
-    private static readonly HttpMethod _connectMethod;
-    private static readonly HttpResponseMessage _okResponse;
-    
-    // TODO-FUTURE: In C# 11 use raw string literals
+    private static readonly HttpMethod _connectMethod = new("CONNECT");
+    private static readonly HttpResponseMessage _okResponse = new(HttpStatusCode.OK);
+
+    // TODO-FUTURE: In C# 11, use raw string literals
     private static ReadOnlySpan<byte> _eolBytes => new byte[2] { (byte)'\r', (byte)'\n' };
     private static ReadOnlySpan<byte> _eofBytes => new byte[4] { (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' };
     private static ReadOnlySpan<byte> _connectBytes => new byte[7] { (byte)'C', (byte)'O', (byte)'N', (byte)'N', (byte)'E', (byte)'C', (byte)'T' };
@@ -30,18 +30,13 @@ public sealed class EavesNode : IDisposable
 
     public bool IsSecure { get; private set; }
 
-    static EavesNode()
-    {
-        _connectMethod = new HttpMethod("CONNECT");
-        _okResponse = new HttpResponseMessage(HttpStatusCode.OK);
-    }
     public EavesNode(Socket client, CertificateManager certifier)
     {
         _client = client;
         _certifier = certifier;
 
         _client.NoDelay = true;
-        _stream = new NetworkStream(client, FileAccess.ReadWrite, true);
+        _stream = new NetworkStream(client, true);
     }
 
     public async Task<HttpRequestMessage> ReceiveHttpRequestAsync()
@@ -71,7 +66,7 @@ public sealed class EavesNode : IDisposable
                 }
 
                 var secureStream = new SslStream(_stream);
-                secureStream.AuthenticateAsServer(certificate, false, SslProtocols.None, false);
+                await secureStream.AuthenticateAsServerAsync(certificate, false, SslProtocols.None, false).ConfigureAwait(false);
                 _stream = secureStream;
 
                 baseUri = request.RequestUri;
@@ -241,10 +236,7 @@ public sealed class EavesNode : IDisposable
 
             if (name.StartsWith("content-", StringComparison.OrdinalIgnoreCase))
             {
-                if (request.Content == null)
-                {
-                    request.Content = new UnbufferedHttpContent();
-                }
+                request.Content ??= new UnbufferedHttpContent();
                 request.Content.Headers.Add(name, value);
             }
             else
