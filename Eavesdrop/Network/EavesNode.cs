@@ -6,7 +6,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
-using Eavesdrop.Network.HTTP;
+using Eavesdrop.Network.Http;
 
 namespace Eavesdrop.Network;
 
@@ -42,25 +42,25 @@ public sealed class EavesNode : IDisposable
         _stream = new NetworkStream(client, FileAccess.ReadWrite, true);
     }
 
-    public async Task<HttpRequestMessage> ReceiveHTTPRequestAsync()
+    public async Task<HttpRequestMessage> ReceiveHttpRequestAsync()
     {
-        using var firstBufferedHTTPSegment = new BufferedHTTPSegment(MINIMUM_HTTP_BUFFER_SIZE, out Memory<byte> buffer);
-        BufferedHTTPSegment lastBufferedHTTPSegment = firstBufferedHTTPSegment;
+        using var firstBufferedHttpSegment = new BufferedHttpSegment(MINIMUM_HTTP_BUFFER_SIZE, out Memory<byte> buffer);
+        BufferedHttpSegment lastBufferedHttpSegment = firstBufferedHttpSegment;
 
         Uri? baseUri = null;
         HttpRequestMessage? request = null;
         while (_client.Connected && _stream.CanRead && request == null)
         {
             int bytesRead = await _stream.ReadAsync(buffer).ConfigureAwait(false);
-            if (!TryParseHTTPRequest(firstBufferedHTTPSegment, lastBufferedHTTPSegment, baseUri, bytesRead, out request, out int unconsumedBytes))
+            if (!TryParseHttpRequest(firstBufferedHttpSegment, lastBufferedHttpSegment, baseUri, bytesRead, out request, out int unconsumedBytes))
             {
-                lastBufferedHTTPSegment = lastBufferedHTTPSegment.Grow(MINIMUM_HTTP_BUFFER_SIZE, out buffer);
+                lastBufferedHttpSegment = lastBufferedHttpSegment.Grow(MINIMUM_HTTP_BUFFER_SIZE, out buffer);
                 continue;
             }
 
             if (request?.Method == _connectMethod && request.RequestUri != null)
             {
-                await SendHTTPResponseAsync(_okResponse).ConfigureAwait(false);
+                await SendHttpResponseAsync(_okResponse).ConfigureAwait(false);
 
                 X509Certificate2? certificate = _certifier.GenerateCertificate(request.RequestUri.DnsSafeHost);
                 if (certificate == null)
@@ -76,22 +76,22 @@ public sealed class EavesNode : IDisposable
                 request.Dispose();
                 request = null;
 
-                firstBufferedHTTPSegment.Collapse();
-                lastBufferedHTTPSegment = firstBufferedHTTPSegment;
+                firstBufferedHttpSegment.Collapse();
+                lastBufferedHttpSegment = firstBufferedHttpSegment;
             }
             else if (unconsumedBytes > 0 && request?.Content != null)
             {
                 int unconsumedStart = buffer.Length - unconsumedBytes;
-                ReadOnlyMemory<byte> unconsumed = lastBufferedHTTPSegment.Memory.Slice(unconsumedStart, bytesRead - unconsumedStart);
-                await BufferHTTPRequestContentAsync(request, unconsumed, _stream).ConfigureAwait(false);
+                ReadOnlyMemory<byte> unconsumed = lastBufferedHttpSegment.Memory.Slice(unconsumedStart, bytesRead - unconsumedStart);
+                await BufferHttpRequestContentAsync(request, unconsumed, _stream).ConfigureAwait(false);
             }
         }
 
         return request ?? throw new NullReferenceException("Failed to parse the HTTP request.");
     }
-    public async Task SendHTTPResponseAsync(HttpResponseMessage response)
+    public async Task SendHttpResponseAsync(HttpResponseMessage response)
     {
-        using var responseWriter = new HTTPResponseWriter(MINIMUM_HTTP_BUFFER_SIZE);
+        using var responseWriter = new HttpResponseWriter(MINIMUM_HTTP_BUFFER_SIZE);
 
         Encoding.UTF8.GetBytes($"HTTP/{response.Version.ToString(2)} {(int)response.StatusCode} {response.ReasonPhrase}", responseWriter);
         responseWriter.AppendLine();
@@ -149,7 +149,7 @@ public sealed class EavesNode : IDisposable
         await _stream.FlushAsync().ConfigureAwait(false);
     }
 
-    private static async Task BufferHTTPRequestContentAsync(HttpRequestMessage request, ReadOnlyMemory<byte> bufferedContent, Stream stream)
+    private static async Task BufferHttpRequestContentAsync(HttpRequestMessage request, ReadOnlyMemory<byte> bufferedContent, Stream stream)
     {
         if (request.Content == null)
         {
@@ -157,7 +157,7 @@ public sealed class EavesNode : IDisposable
         }
 
         int minBufferSize = (int)(request.Content.Headers.ContentLength ?? MINIMUM_HTTP_BUFFER_SIZE);
-        var content = new BufferedHTTPContent(minBufferSize);
+        var content = new BufferedHttpContent(minBufferSize);
         foreach ((string name, IEnumerable<string>? values) in request.Content.Headers)
         {
             content.Headers.Add(name, values);
@@ -178,7 +178,7 @@ public sealed class EavesNode : IDisposable
             totalBytesRead += await stream.ReadAsync(content.Memory.Slice(totalBytesRead)).ConfigureAwait(false);
         }
     }
-    private static bool TryParseHTTPRequest(BufferedHTTPSegment first, BufferedHTTPSegment last, Uri? baseUri, int lastBytesRead, out HttpRequestMessage? request, out int unconsumedBytes)
+    private static bool TryParseHttpRequest(BufferedHttpSegment first, BufferedHttpSegment last, Uri? baseUri, int lastBytesRead, out HttpRequestMessage? request, out int unconsumedBytes)
     {
         request = null;
         unconsumedBytes = 0;
@@ -241,7 +241,7 @@ public sealed class EavesNode : IDisposable
             {
                 if (request.Content == null)
                 {
-                    request.Content = new UnbufferedHTTPContent();
+                    request.Content = new UnbufferedHttpContent();
                 }
                 request.Content.Headers.Add(name, value);
             }
@@ -263,8 +263,7 @@ public sealed class EavesNode : IDisposable
         if (!_disposed)
         {
             _stream.Dispose();
+            _disposed = true;
         }
-        _disposed = true;
-        GC.SuppressFinalize(this);
     }
 }

@@ -1,8 +1,8 @@
 ﻿using System.Buffers;
 
-namespace Eavesdrop.Network.HTTP;
+namespace Eavesdrop.Network.Http;
 
-public sealed class HTTPResponseWriter : IBufferWriter<byte>, IDisposable
+public sealed class HttpResponseWriter : IBufferWriter<byte>, IDisposable
 {
     private bool _disposed;
     private IMemoryOwner<byte> _bufferOwner;
@@ -10,7 +10,7 @@ public sealed class HTTPResponseWriter : IBufferWriter<byte>, IDisposable
     public int Written { get; private set; }
     public Memory<byte> Memory { get; private set; }
 
-    public HTTPResponseWriter(int minBufferSize = -1)
+    public HttpResponseWriter(int minBufferSize = -1)
     {
         _bufferOwner = MemoryPool<byte>.Shared.Rent(minBufferSize);
         Memory = _bufferOwner.Memory;

@@ -14,8 +14,8 @@ public static class INETOptions
 
     public static HashSet<string> Overrides { get; }
 
-    public static string? HTTPAddress { get; set; }
-    public static string? HTTPSAddress { get; set; }
+    public static string? HttpAddress { get; set; }
+    public static string? HttpsAddress { get; set; }
 
     public static bool IsProxyEnabled { get; set; }
     public static bool IsIgnoringLocalTraffic { get; set; }
@@ -124,8 +124,8 @@ public static class INETOptions
             string[] pair = value.Split('=');
             if (pair.Length != 2)
             {
-                HTTPAddress = value;
-                HTTPSAddress = value;
+                HttpAddress = value;
+                HttpsAddress = value;
                 return;
             }
 
@@ -133,8 +133,8 @@ public static class INETOptions
             string protocol = pair[0];
             switch (protocol)
             {
-                case "http": HTTPAddress = address; break;
-                case "https": HTTPSAddress = address; break;
+                case "http": HttpAddress = address; break;
+                case "https": HttpsAddress = address; break;
             }
         }
     }
@@ -142,8 +142,8 @@ public static class INETOptions
     private static string GetJoinedAddresses()
     {
         return string.Join(";",
-            !string.IsNullOrWhiteSpace(HTTPAddress) ? $"http={HTTPAddress}" : string.Empty,
-            !string.IsNullOrWhiteSpace(HTTPSAddress) ? $"https={HTTPSAddress}" : string.Empty);
+            !string.IsNullOrWhiteSpace(HttpAddress) ? $"http={HttpAddress}" : string.Empty,
+            !string.IsNullOrWhiteSpace(HttpsAddress) ? $"https={HttpsAddress}" : string.Empty);
     }
     private static string GetJoinedOverrides()
     {
