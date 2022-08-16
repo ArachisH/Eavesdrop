@@ -4,8 +4,8 @@
 public enum Interceptors
 {
     None = 0,
-    HTTP = 1,
-    HTTPS = 2,
+    Http = 1,
+    Https = 2,
 
-    Default = (HTTP | HTTPS)
+    Default = (Http | Https)
 }

@@ -158,11 +158,11 @@ public static class Eavesdropper
     private static void SetMachineProxy(int port, Interceptors interceptors)
     {
         string address = "127.0.0.1:" + port;
-        if (interceptors.HasFlag(Interceptors.HTTP))
+        if (interceptors.HasFlag(Interceptors.Http))
         {
             INETOptions.HttpAddress = address;
         }
-        if (interceptors.HasFlag(Interceptors.HTTPS))
+        if (interceptors.HasFlag(Interceptors.Https))
         {
             INETOptions.HttpsAddress = address;
         }
