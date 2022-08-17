@@ -10,7 +10,6 @@ public static class Eavesdropper
     private static readonly object _stateLock;
     private static readonly HttpClient _httpClient;
     private static readonly HttpClientHandler _httpClientHandler;
-    private static CancellationTokenSource _cancellationTokenSource;
 
     private static Socket? _listener;
 
