@@ -99,7 +99,7 @@ public sealed class EavesNode : IDisposable
 
         if (response.Content != null && response.Content != _okResponse.Content)
         {
-            foreach ((string name, IEnumerable<string>? values) in response.Content.Headers)
+            foreach ((string name, var values) in response.Content.Headers.NonValidated)
             {
                 Encoding.UTF8.GetBytes($"{name}: ", responseWriter);
                 Encoding.UTF8.GetBytes(string.Join("; ", values), responseWriter);
@@ -107,7 +107,7 @@ public sealed class EavesNode : IDisposable
             }
         }
 
-        foreach ((string name, IEnumerable<string>? values) in response.Headers)
+        foreach ((string name, var values) in response.Headers.NonValidated)
         {
             Encoding.UTF8.GetBytes($"{name}: ", responseWriter);
             Encoding.UTF8.GetBytes(string.Join("; ", values), responseWriter);
@@ -159,9 +159,9 @@ public sealed class EavesNode : IDisposable
 
         int minBufferSize = (int)(request.Content.Headers.ContentLength ?? MINIMUM_HTTP_BUFFER_SIZE);
         var content = new BufferedHttpContent(minBufferSize);
-        foreach ((string name, IEnumerable<string>? values) in request.Content.Headers)
+        foreach ((string name, var values) in request.Content.Headers.NonValidated)
         {
-            content.Headers.Add(name, values);
+            content.Headers.TryAddWithoutValidation(name, values);
         }
 
         request.Content?.Dispose();
@@ -241,7 +241,7 @@ public sealed class EavesNode : IDisposable
             if (name.StartsWith("content-", StringComparison.OrdinalIgnoreCase))
             {
                 request.Content ??= new UnbufferedHttpContent();
-                request.Content.Headers.Add(name, value);
+                request.Content.Headers.TryAddWithoutValidation(name, value);
             }
             else
             {
