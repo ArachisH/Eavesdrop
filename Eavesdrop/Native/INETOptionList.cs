@@ -7,7 +7,7 @@ namespace Eavesdrop;
 /// </summary>
 /// <remarks>INTERNET_PER_CONN_OPTION_LIST structure (wininet.h)</remarks>
 [StructLayout(LayoutKind.Sequential)]
-internal unsafe struct INETOptionList
+internal unsafe ref struct INETOptionList
 {
     /// <summary>
     /// Size of the structure, in bytes.
