@@ -59,8 +59,7 @@ public static class INETOptions
 
                 fixed (INETOption* optionsPtr = options)
                 {
-                    Span<INETOptionList> inetOptionList = stackalloc INETOptionList[1];
-                    inetOptionList[0] = new INETOptionList
+                    INETOptionList inetOptionList = new()
                     {
                         Size = sizeof(INETOptionList),
                         Connection = null,
@@ -69,16 +68,13 @@ public static class INETOptions
                         OptionsPtr = optionsPtr
                     };
 
-                    fixed (INETOptionList* optionListPtr = inetOptionList)
+                    if (!NativeMethods.InternetSetOption(null, INTERNET_OPTION_PER_CONNECTION_OPTION, &inetOptionList, sizeof(INETOptionList)))
                     {
-                        if (!NativeMethods.InternetSetOption(null, INTERNET_OPTION_PER_CONNECTION_OPTION, optionListPtr, sizeof(INETOptionList)))
-                        {
-                            throw new Win32Exception(Marshal.GetLastWin32Error());
-                        }
-                        
-                        NativeMethods.InternetSetOption(null, INTERNET_OPTION_SETTINGS_CHANGED, optionListPtr, sizeof(INETOptionList));
-                        NativeMethods.InternetSetOption(null, INTERNET_OPTION_REFRESH, optionListPtr, sizeof(INETOptionList));
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
                     }
+
+                    NativeMethods.InternetSetOption(null, INTERNET_OPTION_SETTINGS_CHANGED, &inetOptionList, sizeof(INETOptionList));
+                    NativeMethods.InternetSetOption(null, INTERNET_OPTION_REFRESH, &inetOptionList, sizeof(INETOptionList));
                 }
             } 
         }
