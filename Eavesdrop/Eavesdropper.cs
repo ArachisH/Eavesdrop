@@ -40,7 +40,7 @@ public static class Eavesdropper
     }
 
     public static bool IsRunning { get; private set; }
-    public static CertificateManager Certifier { get; set; }
+    public static Certifier Certifier { get; set; }
 
     static Eavesdropper()
     {
@@ -52,7 +52,7 @@ public static class Eavesdropper
         _httpClientHandler.CheckCertificateRevocationList = false;
         _httpClientHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
 
-        Certifier = new CertificateManager("Eavesdrop", "Eavesdrop Root Certificate Authority");
+        Certifier = new Certifier("Eavesdrop", "Eavesdrop Root Certificate Authority");
     }
 
     public static void Terminate()
@@ -106,13 +106,13 @@ public static class Eavesdropper
         {
             while (IsRunning && _listener != null)
             {
-                Socket client = await _listener.AcceptAsync().ConfigureAwait(false);
-                _ = HandleClientAsync(client);
+                Socket socket = await _listener.AcceptAsync().ConfigureAwait(false);
+                _ = HandleSocketAsync(socket);
             }
         }
         catch { /* Catch all exceptions. */ }
     }
-    private static async Task HandleClientAsync(Socket client, CancellationToken cancellationToken = default)
+    private static async Task HandleSocketAsync(Socket client, CancellationToken cancellationToken = default)
     {
         using var local = new EavesNode(client, Certifier);
 
