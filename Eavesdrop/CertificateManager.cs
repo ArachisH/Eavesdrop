@@ -3,7 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Eavesdrop;
 
-public sealed class CertificateManager : IDisposable
+public sealed class Certifier : ICertifier, IDisposable
 {
     private readonly X509Store _rootStore, _myStore;
     private readonly IDictionary<string, X509Certificate2> _certificateCache;
@@ -18,16 +18,16 @@ public sealed class CertificateManager : IDisposable
 
     public X509Certificate2? Authority { get; private set; }
 
-    public CertificateManager()
+    public Certifier()
         : this("Eavesdrop")
     { }
-    public CertificateManager(string issuer)
+    public Certifier(string issuer)
         : this(issuer, $"{issuer} Root Certificate Authority", StoreLocation.CurrentUser)
     { }
-    public CertificateManager(string issuer, string certificateAuthorityName)
+    public Certifier(string issuer, string certificateAuthorityName)
         : this(issuer, certificateAuthorityName, StoreLocation.CurrentUser)
     { }
-    public CertificateManager(string issuer, string certificateAuthorityName, StoreLocation location)
+    public Certifier(string issuer, string certificateAuthorityName, StoreLocation location)
     {
         _myStore = new X509Store(StoreName.My, location);
         _rootStore = new X509Store(StoreName.Root, location);
@@ -67,9 +67,7 @@ public sealed class CertificateManager : IDisposable
     }
     public X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
-        using var rsa = Authority == null
-            ? new RSACryptoServiceProvider(KeyLength)
-            : new RSACryptoServiceProvider(KeyLength, new CspParameters(1, "Microsoft Base Cryptographic Provider v1.0", Guid.NewGuid().ToString()));
+        using var rsa = RSA.Create(KeyLength);
 
         var certificateRequest = new CertificateRequest(subjectName, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         if (Authority == null)

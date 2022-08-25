@@ -20,21 +20,19 @@ public sealed class EavesNode : IDisposable
     private static ReadOnlySpan<byte> _eofBytes => "\r\n\r\n"u8;
     private static ReadOnlySpan<byte> _connectBytes => "CONNECT"u8;
 
-    private readonly Socket _client;
-    private readonly CertificateManager _certifier;
+    private readonly ICertifier? _certifier;
 
     private bool _disposed;
     private Stream _stream;
 
-    public bool IsSecure { get; private set; }
+    public bool IsSecure => _stream is SslStream sslStream && sslStream.IsAuthenticated;
 
-    public EavesNode(Socket client, CertificateManager certifier)
+    public EavesNode(Socket socket, ICertifier? certifier)
     {
-        _client = client;
-        _certifier = certifier;
+        socket.NoDelay = true;
 
-        _client.NoDelay = true;
-        _stream = new NetworkStream(client, true);
+        _certifier = certifier;
+        _stream = new NetworkStream(socket, ownsSocket: true);
     }
 
     public async Task<HttpRequestMessage> ReceiveHttpRequestAsync(CancellationToken cancellationToken = default)
@@ -44,7 +42,7 @@ public sealed class EavesNode : IDisposable
 
         Uri? baseUri = null;
         HttpRequestMessage? request = null;
-        while (_client.Connected && _stream.CanRead && request == null)
+        while (_stream.CanRead && request == null)
         {
             int bytesRead = await _stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
             if (!TryParseHttpRequest(firstBufferedHttpSegment, lastBufferedHttpSegment, baseUri, bytesRead, out request, out int unconsumedBytes))
@@ -55,9 +53,14 @@ public sealed class EavesNode : IDisposable
 
             if (request?.Method == _connectMethod && request.RequestUri != null)
             {
-                await SendHttpResponseAsync(_okResponse, cancellationToken).ConfigureAwait(false);
+                if (_certifier == null)
+                {
+                    throw new NotSupportedException("Cannot process HTTPS upgrade without a certifier.");
+                }
 
-                X509Certificate2? certificate = _certifier.GenerateCertificate(request.RequestUri.DnsSafeHost);
+                await SendHttpResponseAsync(_okResponse, cancellationToken).ConfigureAwait(false);
+                
+                X509Certificate2? certificate = _certifier?.GenerateCertificate(request.RequestUri.DnsSafeHost);
                 if (certificate == null)
                 {
                     throw new NullReferenceException($"Failed to generate a self-signed certificate for '{request.RequestUri.DnsSafeHost}'.");

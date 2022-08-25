@@ -5,7 +5,9 @@ VisualStudioVersion = 17.0.32112.339
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Eavesdrop", "Eavesdrop\Eavesdrop.csproj", "{BF141F7D-B694-4B8E-8799-CA33856EE564}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eavesdrop.CLI", "Eavesdrop.CLI\Eavesdrop.CLI.csproj", "{7302CBDB-755D-4656-ABF4-C0A06DBD5538}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Eavesdrop.CLI", "Eavesdrop.CLI\Eavesdrop.CLI.csproj", "{7302CBDB-755D-4656-ABF4-C0A06DBD5538}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eavesdrop.Tests", "Eavesdrop.Tests\Eavesdrop.Tests.csproj", "{4F238A21-BC00-4E01-9FD8-B5129AB55637}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{7302CBDB-755D-4656-ABF4-C0A06DBD5538}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7302CBDB-755D-4656-ABF4-C0A06DBD5538}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7302CBDB-755D-4656-ABF4-C0A06DBD5538}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F238A21-BC00-4E01-9FD8-B5129AB55637}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F238A21-BC00-4E01-9FD8-B5129AB55637}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F238A21-BC00-4E01-9FD8-B5129AB55637}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F238A21-BC00-4E01-9FD8-B5129AB55637}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
