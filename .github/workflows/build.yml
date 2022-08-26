@@ -1,0 +1,15 @@
+name: Build
+
+on:
+  workflow_run:
+    workdflows: [Restore]
+    types:
+      - completed
+
+jobs:
+  on-success:
+    runs-on: self-hosted
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+      - run: dotnet build --no-restore --verbosity normal
