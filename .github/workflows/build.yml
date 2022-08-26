@@ -10,6 +10,5 @@ jobs:
   on-success:
     runs-on: self-hosted
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    
     steps:
       - run: dotnet build --no-restore --verbosity normal
