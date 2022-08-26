@@ -2,7 +2,7 @@ name: Build
 
 on:
   workflow_run:
-    workdflows: [Restore]
+    workflows: [Restore]
     types:
       - completed
 
