@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Text;
 using System.Net.Sockets;
 
 using Eavesdrop.Network;
@@ -39,8 +40,9 @@ public static class Eavesdropper
         }
     }
 
-    public static bool IsRunning { get; private set; }
     public static Certifier Certifier { get; set; }
+    public static InterceptionMode Mode { get; set; }
+    public static bool IsRunning { get; private set; }
 
     static Eavesdropper()
     {
@@ -100,6 +102,31 @@ public static class Eavesdropper
         }
     }
 
+    private static async Task HandlePACRequests(int port)
+    {
+        string PAC = @$"
+function FindProxyForURL (url, host) {{
+  return ""PROXY 127.0.0.1:{port}; DIRECT"";
+}}";
+        byte[] pacBuffer = Encoding.UTF8.GetBytes(PAC);
+
+        using var pacListener = new HttpListener();
+        pacListener.Prefixes.Add("http://127.0.0.1:12087/proxy.pac/");
+        pacListener.Start();
+
+        while (IsRunning && _listener != null)
+        {
+            HttpListenerContext context = await pacListener.GetContextAsync().ConfigureAwait(false);
+            context.Response.ContentType = "application/x-ns-proxy-autoconfig";
+            context.Response.ContentLength64 = pacBuffer.Length;
+            try
+            {
+                context.Response.OutputStream.Write(pacBuffer, 0, pacBuffer.Length);
+            }
+            finally { await context.Response.OutputStream.DisposeAsync().ConfigureAwait(false); }
+        }
+        pacListener.Stop();
+    }
     private static async Task InterceptRequestAsync()
     {
         try
@@ -160,17 +187,20 @@ public static class Eavesdropper
     private static void SetMachineProxy(int port, Interceptors interceptors)
     {
         string address = "127.0.0.1:" + port;
-        if (interceptors.HasFlag(Interceptors.Http))
+        if (Mode == InterceptionMode.Blacklist)
         {
-            INETOptions.HttpAddress = address;
+            if (interceptors.HasFlag(Interceptors.Http))
+            {
+                INETOptions.HttpAddress = address;
+            }
+            if (interceptors.HasFlag(Interceptors.Https))
+            {
+                INETOptions.HttpsAddress = address;
+            }
+            INETOptions.IsIgnoringLocalTraffic = true;
         }
-        if (interceptors.HasFlag(Interceptors.Https))
-        {
-            INETOptions.HttpsAddress = address;
-        }
-        INETOptions.IsProxyEnabled = true;
-        INETOptions.IsIgnoringLocalTraffic = true;
 
-        INETOptions.Save();
+        INETOptions.IsProxyEnabled = true;
+        INETOptions.Save(Mode == InterceptionMode.Whitelist ? address : null);
     }
 }
