@@ -27,7 +27,16 @@ public static class INETOptions
         Load();
     }
 
-    public unsafe static void Save()
+    public static void Load()
+    {
+        lock (_stateLock)
+        {
+            LoadAddresses();
+            LoadOverrides();
+            IsProxyEnabled = _proxyKey?.GetValue("ProxyEnable")?.ToString() == "1";
+        }
+    }
+    public unsafe static void Save(string? autoConfigUrl = null)
     {
         const int INTERNET_OPTION_REFRESH = 37;
         const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
@@ -76,16 +85,7 @@ public static class INETOptions
                     NativeMethods.InternetSetOption(null, INTERNET_OPTION_SETTINGS_CHANGED, &inetOptionList, sizeof(INETOptionList));
                     NativeMethods.InternetSetOption(null, INTERNET_OPTION_REFRESH, &inetOptionList, sizeof(INETOptionList));
                 }
-            } 
-        }
-    }
-    public static void Load()
-    {
-        lock (_stateLock)
-        {
-            LoadAddresses();
-            LoadOverrides();
-            IsProxyEnabled = _proxyKey?.GetValue("ProxyEnable")?.ToString() == "1";
+            }
         }
     }
 
