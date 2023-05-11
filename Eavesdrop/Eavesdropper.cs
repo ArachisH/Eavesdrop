@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using System.Text;
 using System.Net.Sockets;
 
 using Eavesdrop.Network;
@@ -41,7 +40,7 @@ public static class Eavesdropper
     }
 
     public static Certifier Certifier { get; set; }
-    public static InterceptionMode Mode { get; set; }
+    public static int ActivePort { get; private set; }
     public static bool IsRunning { get; private set; }
 
     static Eavesdropper()
@@ -61,7 +60,7 @@ public static class Eavesdropper
     {
         lock (_stateLock)
         {
-            ResetMachineProxy();
+            INETOptions.Save(null);
             IsRunning = false;
 
             _listener?.Close();
@@ -70,14 +69,6 @@ public static class Eavesdropper
     }
     public static void Initiate(int port)
     {
-        Initiate(port, Interceptors.Default);
-    }
-    public static void Initiate(int port, Interceptors interceptors)
-    {
-        Initiate(port, interceptors, true);
-    }
-    public static void Initiate(int port, Interceptors interceptors, bool setSystemProxy)
-    {
         lock (_stateLock)
         {
             _listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
@@ -85,48 +76,13 @@ public static class Eavesdropper
             _listener.Listen();
 
             IsRunning = true;
+            ActivePort = port;
 
+            INETOptions.Save($"http://127.0.0.1:{port}/proxy.pac/");
             Task.Factory.StartNew(InterceptRequestAsync, TaskCreationOptions.LongRunning);
-            if (setSystemProxy)
-            {
-                SetMachineProxy(port, interceptors);
-            }
         }
     }
 
-    public static void AddOverrides(params string[] domains)
-    {
-        foreach (string domain in domains)
-        {
-            INETOptions.Overrides.Add(domain);
-        }
-    }
-
-    private static async Task HandlePACRequests(int port)
-    {
-        string PAC = @$"
-function FindProxyForURL (url, host) {{
-  return ""PROXY 127.0.0.1:{port}; DIRECT"";
-}}";
-        byte[] pacBuffer = Encoding.UTF8.GetBytes(PAC);
-
-        using var pacListener = new HttpListener();
-        pacListener.Prefixes.Add("http://127.0.0.1:12087/proxy.pac/");
-        pacListener.Start();
-
-        while (IsRunning && _listener != null)
-        {
-            HttpListenerContext context = await pacListener.GetContextAsync().ConfigureAwait(false);
-            context.Response.ContentType = "application/x-ns-proxy-autoconfig";
-            context.Response.ContentLength64 = pacBuffer.Length;
-            try
-            {
-                context.Response.OutputStream.Write(pacBuffer, 0, pacBuffer.Length);
-            }
-            finally { await context.Response.OutputStream.DisposeAsync().ConfigureAwait(false); }
-        }
-        pacListener.Stop();
-    }
     private static async Task InterceptRequestAsync()
     {
         try
@@ -150,17 +106,30 @@ function FindProxyForURL (url, host) {{
         HttpContent? originalRequestContent = request.Content;
         try
         {
-            var requestArgs = new RequestInterceptedEventArgs(request);
-            await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
-            if (requestArgs.Cancel || cancellationToken.IsCancellationRequested) return;
+            if (request.RequestUri?.OriginalString == "http://127.0.0.1/proxy.pac/")
+            {
+                // TODO: Implement dynamic filtering.
+                response = new HttpResponseMessage(HttpStatusCode.OK);
+                response.Content = new StringContent($$"""
+                    function FindProxyForURL (url, host)
+                    {
+                        return "PROXY 127.0.0.1:{{ActivePort}}; DIRECT";
+                    }
+                    """, null, "application/x-ns-proxy-autoconfig");
+            }
+            else
+            {
+                var requestArgs = new RequestInterceptedEventArgs(request);
+                await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
+                if (requestArgs.Cancel || cancellationToken.IsCancellationRequested) return;
 
-            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-            originalResponseContent = response.Content;
+                response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                originalResponseContent = response.Content;
 
-            var responseArgs = new ResponseInterceptedEventArgs(response);
-            await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
-            if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
-
+                var responseArgs = new ResponseInterceptedEventArgs(response);
+                await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
+                if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
+            }
             await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -171,36 +140,5 @@ function FindProxyForURL (url, host) {{
             response?.Dispose();
             originalResponseContent?.Dispose();
         }
-    }
-
-    private static void ResetMachineProxy()
-    {
-        INETOptions.Overrides.Clear();
-        INETOptions.IsIgnoringLocalTraffic = false;
-
-        INETOptions.HttpAddress = null;
-        INETOptions.HttpsAddress = null;
-        INETOptions.IsProxyEnabled = false;
-
-        INETOptions.Save();
-    }
-    private static void SetMachineProxy(int port, Interceptors interceptors)
-    {
-        string address = "127.0.0.1:" + port;
-        if (Mode == InterceptionMode.Blacklist)
-        {
-            if (interceptors.HasFlag(Interceptors.Http))
-            {
-                INETOptions.HttpAddress = address;
-            }
-            if (interceptors.HasFlag(Interceptors.Https))
-            {
-                INETOptions.HttpsAddress = address;
-            }
-            INETOptions.IsIgnoringLocalTraffic = true;
-        }
-
-        INETOptions.IsProxyEnabled = true;
-        INETOptions.Save(Mode == InterceptionMode.Whitelist ? address : null);
     }
 }
