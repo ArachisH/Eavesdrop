@@ -11,7 +11,7 @@ public class Program
             Eavesdropper.RequestInterceptedAsync += Eavesdropper_RequestInterceptedAsync;
             Eavesdropper.ResponseInterceptedAsync += Eavesdropper_ResponseInterceptedAsync;
 
-            Eavesdropper.Initiate(12086, Interceptors.Default);
+            Eavesdropper.Initiate(12086);
             Console.WriteLine("Press any key to terminate the application at any time...");
         }
 

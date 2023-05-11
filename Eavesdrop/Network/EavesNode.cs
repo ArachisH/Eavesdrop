@@ -217,6 +217,16 @@ public sealed class EavesNode : IDisposable
         string uri = Encoding.UTF8.GetString(httpHeadersSpan.Slice(uriStart, uriEnd));
         string method = Encoding.UTF8.GetString(httpHeadersSpan.Slice(0, uriStart - 1));
 
+        if (uri == "/proxy.pac/")
+        {
+            request = new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri = new Uri("http://127.0.0.1/proxy.pac/")
+            };
+            return true;
+        }
+
         request = new HttpRequestMessage
         {
             Method = httpHeadersSpan.StartsWith(_connectBytes) ? _connectMethod : new HttpMethod(method),

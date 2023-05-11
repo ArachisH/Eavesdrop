@@ -1,41 +1,17 @@
 ﻿using System.ComponentModel;
 using System.Runtime.InteropServices;
 
-using Microsoft.Win32;
-
 namespace Eavesdrop;
 
 public static class INETOptions
 {
     private static readonly object _stateLock;
-    private static readonly RegistryKey? _proxyKey;
-
-    public static HashSet<string> Overrides { get; }
-
-    public static string? HttpAddress { get; set; }
-    public static string? HttpsAddress { get; set; }
-
-    public static bool IsProxyEnabled { get; set; }
-    public static bool IsIgnoringLocalTraffic { get; set; }
 
     static INETOptions()
     {
         _stateLock = new object();
-        _proxyKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings", true);
-
-        Overrides = new HashSet<string>();
-        Load();
     }
 
-    public static void Load()
-    {
-        lock (_stateLock)
-        {
-            LoadAddresses();
-            LoadOverrides();
-            IsProxyEnabled = _proxyKey?.GetValue("ProxyEnable")?.ToString() == "1";
-        }
-    }
     public unsafe static void Save(string? autoConfigUrl = null)
     {
         const int INTERNET_OPTION_REFRESH = 37;
@@ -44,37 +20,23 @@ public static class INETOptions
 
         lock (_stateLock)
         {
-            string? addresses = IsProxyEnabled ? GetJoinedAddresses() : string.Empty;
-            string? overrides = IsProxyEnabled ? GetJoinedOverrides() : string.Empty;
-
-            fixed (char* addressesPtr = addresses)
-            fixed (char* overridesPtr = overrides)
+            fixed (char* autoConfigUrlPtr = autoConfigUrl)
             {
-                int optionsCount = 1;
-                Span<INETOption> options = stackalloc INETOption[3];
+                Span<INETOption> options = stackalloc INETOption[2];
+                ProxyKind kind = string.IsNullOrWhiteSpace(autoConfigUrl) ? ProxyKind.PROXY_TYPE_DIRECT : ProxyKind.PROXY_TYPE_AUTO_PROXY_URL;
 
-                ProxyKind kind = ProxyKind.PROXY_TYPE_DIRECT;
-                if (!string.IsNullOrWhiteSpace(addresses))
-                {
-                    kind |= ProxyKind.PROXY_TYPE_PROXY;
-
-                    options[optionsCount++] = new INETOption(OptionKind.INTERNET_PER_CONN_PROXY_SERVER, addressesPtr);
-                    if (!string.IsNullOrWhiteSpace(overrides))
-                    {
-                        options[optionsCount++] = new INETOption(OptionKind.INTERNET_PER_CONN_PROXY_BYPASS, overridesPtr);
-                    }
-                }
                 options[0] = new INETOption(OptionKind.INTERNET_PER_CONN_FLAGS, (int)kind);
+                options[1] = new INETOption(OptionKind.INTERNET_PER_CONN_AUTOCONFIG_URL, autoConfigUrlPtr);
 
                 fixed (INETOption* optionsPtr = options)
                 {
                     INETOptionList inetOptionList = new()
                     {
                         Size = sizeof(INETOptionList),
-                        Connection = null,
-                        OptionCount = optionsCount,
                         OptionError = 0,
-                        OptionsPtr = optionsPtr
+                        Connection = null,
+                        OptionsPtr = optionsPtr,
+                        OptionCount = options.Length
                     };
 
                     if (!NativeMethods.InternetSetOption(null, INTERNET_OPTION_PER_CONNECTION_OPTION, &inetOptionList, sizeof(INETOptionList)))
@@ -87,58 +49,5 @@ public static class INETOptions
                 }
             }
         }
-    }
-
-    private static void LoadOverrides()
-    {
-        string? proxyOverride = _proxyKey?.GetValue("ProxyOverride")?.ToString();
-        if (string.IsNullOrWhiteSpace(proxyOverride)) return;
-
-        string[] overrides = proxyOverride.Split(';');
-        foreach (string @override in overrides)
-        {
-            if (@override == "<local>")
-            {
-                IsIgnoringLocalTraffic = true;
-            }
-            else Overrides.Add(@override);
-        }
-    }
-    private static void LoadAddresses()
-    {
-        string? proxyServer = _proxyKey?.GetValue("ProxyServer")?.ToString();
-        if (string.IsNullOrWhiteSpace(proxyServer)) return;
-
-        string[] values = proxyServer.Split(';');
-        foreach (string value in values)
-        {
-            string[] pair = value.Split('=');
-            if (pair.Length != 2)
-            {
-                HttpAddress = value;
-                HttpsAddress = value;
-                return;
-            }
-
-            string address = pair[1];
-            string protocol = pair[0];
-            switch (protocol)
-            {
-                case "http": HttpAddress = address; break;
-                case "https": HttpsAddress = address; break;
-            }
-        }
-    }
-
-    private static string GetJoinedAddresses()
-    {
-        return string.Join(";",
-            !string.IsNullOrWhiteSpace(HttpAddress) ? $"http={HttpAddress}" : string.Empty,
-            !string.IsNullOrWhiteSpace(HttpsAddress) ? $"https={HttpsAddress}" : string.Empty);
-    }
-    private static string GetJoinedOverrides()
-    {
-        return string.Join(";", Overrides) +
-            (IsIgnoringLocalTraffic ? ";<local>" : string.Empty);
     }
 }
