@@ -13,12 +13,11 @@ public sealed class EavesNode : IDisposable
 {
     private const short MINIMUM_HTTP_BUFFER_SIZE = 1024;
 
-    private static readonly HttpMethod _connectMethod = new("CONNECT");
+    private static readonly Dictionary<string, HttpMethod> _httpMethodTable;
     private static readonly HttpResponseMessage _okResponse = new(HttpStatusCode.OK);
 
     private static ReadOnlySpan<byte> _eolBytes => "\r\n"u8;
     private static ReadOnlySpan<byte> _eofBytes => "\r\n\r\n"u8;
-    private static ReadOnlySpan<byte> _connectBytes => "CONNECT"u8;
 
     private readonly ICertifier? _certifier;
 
@@ -27,7 +26,22 @@ public sealed class EavesNode : IDisposable
 
     public bool IsSecure => _stream is SslStream sslStream && sslStream.IsAuthenticated;
 
-    public EavesNode(Socket socket, ICertifier? certifier)
+    static EavesNode()
+    {
+        _httpMethodTable = new Dictionary<string, HttpMethod>(9)
+        {
+            ["DELETE"] = HttpMethod.Delete,
+            ["GET"] = HttpMethod.Get,
+            ["HEAD"] = HttpMethod.Head,
+            ["OPTIONS"] = HttpMethod.Options,
+            ["PATCH"] = HttpMethod.Patch,
+            ["POST"] = HttpMethod.Post,
+            ["PUT"] = HttpMethod.Put,
+            ["TRACE"] = HttpMethod.Trace,
+            ["CONNECT"] = new HttpMethod("CONNECT")
+        };
+    }
+    public EavesNode(Socket socket, ICertifier? certifier, string? sessionToken = null)
     {
         socket.NoDelay = true;
 
@@ -45,13 +59,13 @@ public sealed class EavesNode : IDisposable
         while (_stream.CanRead && request == null)
         {
             int bytesRead = await _stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            if (!TryParseHttpRequest(firstBufferedHttpSegment, lastBufferedHttpSegment, baseUri, bytesRead, out request, out int unconsumedBytes))
+            if (!TryParseHttpRequest(firstBufferedHttpSegment, lastBufferedHttpSegment, baseUri, out request, out int unconsumedBytes))
             {
                 lastBufferedHttpSegment = lastBufferedHttpSegment.Grow(MINIMUM_HTTP_BUFFER_SIZE, out buffer);
                 continue;
             }
 
-            if (request?.Method == _connectMethod && request.RequestUri != null)
+            if (request?.Method.Method == "CONNECT" && request.RequestUri != null)
             {
                 if (_certifier == null)
                 {
@@ -59,7 +73,7 @@ public sealed class EavesNode : IDisposable
                 }
 
                 await SendHttpResponseAsync(_okResponse, cancellationToken).ConfigureAwait(false);
-                
+
                 X509Certificate2? certificate = _certifier?.GenerateCertificate(request.RequestUri.DnsSafeHost);
                 if (certificate == null)
                 {
@@ -152,40 +166,11 @@ public sealed class EavesNode : IDisposable
         await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task BufferHttpRequestContentAsync(HttpRequestMessage request, ReadOnlyMemory<byte> bufferedContent, Stream stream, CancellationToken cancellationToken = default)
-    {
-        if (request.Content == null)
-        {
-            throw new NullReferenceException("The content property of the request message is null.");
-        }
-
-        int minBufferSize = (int)(request.Content.Headers.ContentLength ?? MINIMUM_HTTP_BUFFER_SIZE);
-        var content = new BufferedHttpContent(minBufferSize);
-        foreach ((string name, var values) in request.Content.Headers.NonValidated)
-        {
-            content.Headers.TryAddWithoutValidation(name, values);
-        }
-
-        request.Content?.Dispose();
-        request.Content = content;
-
-        int totalBytesRead = 0;
-        if (bufferedContent.Length > 0)
-        {
-            bufferedContent.CopyTo(content.Memory);
-            totalBytesRead += bufferedContent.Length;
-        }
-
-        while (totalBytesRead < minBufferSize)
-        {
-            totalBytesRead += await stream.ReadAsync(content.Memory.Slice(totalBytesRead), cancellationToken).ConfigureAwait(false);
-        }
-    }
-    private static bool TryParseHttpRequest(BufferedHttpSegment first, BufferedHttpSegment last, Uri? baseUri, int lastBytesRead, out HttpRequestMessage? request, out int unconsumedBytes)
+    private static bool TryParseHttpRequest(BufferedHttpSegment first, BufferedHttpSegment last, Uri? baseUri, out HttpRequestMessage? request, out int unconsumedBytes)
     {
         request = null;
         unconsumedBytes = 0;
-        ReadOnlySpan<byte> httpSpan = null, httpHeadersSpan = null;
+        ReadOnlySpan<byte> httpSpan, httpHeadersSpan;
 
         if (first == last)
         {
@@ -217,22 +202,14 @@ public sealed class EavesNode : IDisposable
         string uri = Encoding.UTF8.GetString(httpHeadersSpan.Slice(uriStart, uriEnd));
         string method = Encoding.UTF8.GetString(httpHeadersSpan.Slice(0, uriStart - 1));
 
-        if (uri == "/proxy.pac/")
+        request = new HttpRequestMessage(_httpMethodTable[method], string.Empty);
+
+        if (method == "CONNECT")
         {
-            request = new HttpRequestMessage
-            {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri("http://127.0.0.1/proxy.pac/")
-            };
+            request.RequestUri = new Uri("https://" + uri);
             return true;
         }
-
-        request = new HttpRequestMessage
-        {
-            Method = httpHeadersSpan.StartsWith(_connectBytes) ? _connectMethod : new HttpMethod(method),
-            RequestUri = new Uri((httpHeadersSpan.StartsWith(_connectBytes) ? "https://" : baseUri?.GetLeftPart(UriPartial.Authority) ?? string.Empty) + uri)
-        };
-        if (request.Method == _connectMethod) return true;
+        else request.RequestUri = new Uri((baseUri?.GetLeftPart(UriPartial.Authority) ?? string.Empty) + uri, UriKind.RelativeOrAbsolute);
 
         // Parse HTTP Request Headers
         httpHeadersSpan = httpHeadersSpan.Slice(httpHeadersSpan.IndexOf(_eolBytes) + _eolBytes.Length);
@@ -265,7 +242,37 @@ public sealed class EavesNode : IDisposable
                 }
             }
         }
+
         return true;
+    }
+    private static async Task BufferHttpRequestContentAsync(HttpRequestMessage request, ReadOnlyMemory<byte> bufferedContent, Stream stream, CancellationToken cancellationToken = default)
+    {
+        if (request.Content == null)
+        {
+            throw new NullReferenceException("The content property of the request message is null.");
+        }
+
+        int minBufferSize = (int)(request.Content.Headers.ContentLength ?? MINIMUM_HTTP_BUFFER_SIZE);
+        var content = new BufferedHttpContent(minBufferSize);
+        foreach ((string name, var values) in request.Content.Headers.NonValidated)
+        {
+            content.Headers.TryAddWithoutValidation(name, values);
+        }
+
+        request.Content?.Dispose();
+        request.Content = content;
+
+        int totalBytesRead = 0;
+        if (bufferedContent.Length > 0)
+        {
+            bufferedContent.CopyTo(content.Memory);
+            totalBytesRead += bufferedContent.Length;
+        }
+
+        while (totalBytesRead < minBufferSize)
+        {
+            totalBytesRead += await stream.ReadAsync(content.Memory.Slice(totalBytesRead), cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public void Dispose()
