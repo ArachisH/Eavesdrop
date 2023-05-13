@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Text;
 using System.Net.Sockets;
 
 using Eavesdrop.Network;
@@ -40,8 +41,14 @@ public static class Eavesdropper
     }
 
     public static Certifier Certifier { get; set; }
+
     public static int ActivePort { get; private set; }
     public static bool IsRunning { get; private set; }
+    public static List<string> Targets { get; private set; }
+    public static List<string> IntranetDomains { get; private set; }
+
+    public static bool IsProxyingTargets { get; set; }
+    public static bool IsProxyingPrivateNetworks { get; set; }
 
     static Eavesdropper()
     {
@@ -53,6 +60,8 @@ public static class Eavesdropper
         _httpClientHandler.CheckCertificateRevocationList = false;
         _httpClientHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
 
+        Targets = new List<string>();
+        IntranetDomains = new List<string>();
         Certifier = new Certifier("Eavesdrop", "Eavesdrop Root Certificate Authority");
     }
 
@@ -78,22 +87,83 @@ public static class Eavesdropper
             IsRunning = true;
             ActivePort = port;
 
-            INETOptions.Save($"http://127.0.0.1:{port}/proxy.pac/");
             Task.Factory.StartNew(InterceptRequestAsync, TaskCreationOptions.LongRunning);
+            INETOptions.Save($"http://127.0.0.1:{ActivePort}/proxy.pac/");
         }
     }
 
+    private static string GeneratePAC()
+    {
+        var pacBuilder = new StringBuilder();
+
+        pacBuilder.AppendLine("function FindProxyForURL (url, host)");
+        pacBuilder.AppendLine("{");
+
+        pacBuilder.AppendLine("    host = host.toLowerCase();");
+        pacBuilder.AppendLine();
+        pacBuilder.AppendLine("    var hostIP;");
+        pacBuilder.AppendLine("    var isIpV4Addr = /^(\\d+.){3}\\d+$/;");
+        pacBuilder.AppendLine("    if (isIpV4Addr.test(host))");
+        pacBuilder.AppendLine("        hostIP = host;");
+        pacBuilder.AppendLine("    else");
+        pacBuilder.AppendLine("        hostIP = 0;");
+
+        if (!IsProxyingPrivateNetworks)
+        {
+            pacBuilder.Append("""
+
+                    if (isPlainHostName(host) || shExpMatch(host, "*.local") ||
+                        shExpMatch(hostIP, "10.*") ||
+                        shExpMatch(hostIP, "172.16.*") ||
+                        shExpMatch(hostIP, "192.168.*")
+                """);
+
+            if (IntranetDomains.Count > 0)
+            {
+                for (int i = 0; i < IntranetDomains.Count; i++)
+                {
+                    pacBuilder.Append($$"""
+                         ||
+                                shExpMatch(host, "{{IntranetDomains[i]}}")
+                        """);
+                }
+            }
+
+            pacBuilder.Append("""
+                ) return "DIRECT";
+
+
+                """);
+        }
+
+        if (Targets.Count > 0)
+        {
+            pacBuilder.Append($"    if (shExpMatch(host, \"{Targets[0]}\")");
+            for (int i = 1; i < Targets.Count; i++)
+            {
+                pacBuilder.AppendLine(" ||");
+                pacBuilder.Append($"        shExpMatch(host, \"{Targets[i]}\")");
+            }
+            pacBuilder.AppendLine($") return \"{(IsProxyingTargets ? $"PROXY 127.0.0.1:{ActivePort}; " : null)}DIRECT\";");
+            pacBuilder.AppendLine();
+        }
+
+        pacBuilder.AppendLine($"    return \"{(!IsProxyingTargets ? $"PROXY 127.0.0.1:{ActivePort}; " : null)}DIRECT\";");
+        pacBuilder.Append('}');
+
+        return pacBuilder.ToString();
+    }
     private static async Task InterceptRequestAsync()
     {
         try
         {
             while (IsRunning && _listener != null)
             {
-                Socket socket = await _listener.AcceptAsync().ConfigureAwait(false);
-                _ = HandleSocketAsync(socket);
+                Socket client = await _listener.AcceptAsync().ConfigureAwait(false);
+                _ = HandleSocketAsync(client);
             }
         }
-        catch { /* Catch all exceptions. */ }
+        catch { if (IsRunning) Terminate(); }
     }
     private static async Task HandleSocketAsync(Socket client, CancellationToken cancellationToken = default)
     {
@@ -106,18 +176,7 @@ public static class Eavesdropper
         HttpContent? originalRequestContent = request.Content;
         try
         {
-            if (request.RequestUri?.OriginalString == "http://127.0.0.1/proxy.pac/")
-            {
-                // TODO: Implement dynamic filtering.
-                response = new HttpResponseMessage(HttpStatusCode.OK);
-                response.Content = new StringContent($$"""
-                    function FindProxyForURL (url, host)
-                    {
-                        return "PROXY 127.0.0.1:{{ActivePort}}; DIRECT";
-                    }
-                    """, null, "application/x-ns-proxy-autoconfig");
-            }
-            else
+            if (request.RequestUri?.OriginalString != "/proxy.pac/")
             {
                 var requestArgs = new RequestInterceptedEventArgs(request);
                 await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
@@ -129,6 +188,12 @@ public static class Eavesdropper
                 var responseArgs = new ResponseInterceptedEventArgs(response);
                 await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
                 if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
+            }
+            else
+            {
+                // TODO: Utilize offline PAC file.
+                response = new HttpResponseMessage(HttpStatusCode.OK);
+                response.Content = new StringContent(GeneratePAC(), null, "application/x-ns-proxy-autoconfig");
             }
             await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
         }
