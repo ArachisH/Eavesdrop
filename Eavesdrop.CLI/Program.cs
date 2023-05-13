@@ -11,6 +11,18 @@ public class Program
             Eavesdropper.RequestInterceptedAsync += Eavesdropper_RequestInterceptedAsync;
             Eavesdropper.ResponseInterceptedAsync += Eavesdropper_ResponseInterceptedAsync;
 
+            // Do NOT intercept Http(s) requests from the google domain.
+            Eavesdropper.Targets.Add("*google.com");
+
+            // OR ONLY intercept Http(s) from the given list of targets.
+            //Eavesdropper.IsProxyingTargets = true;
+
+            // Intercept requests to private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+            //Eavesdropper.IsProxyingPrivateNetworks = true;
+
+            // Alternatively, we can include domains that only exist on your private network.
+            //Eavesdropper.IntranetDomains.Add("*myLocalDomain");
+
             Eavesdropper.Initiate(12086);
             Console.WriteLine("Press any key to terminate the application at any time...");
         }
