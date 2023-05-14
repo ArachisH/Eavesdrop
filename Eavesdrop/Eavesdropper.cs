@@ -88,7 +88,7 @@ public static class Eavesdropper
             ActivePort = port;
 
             Task.Factory.StartNew(InterceptRequestAsync, TaskCreationOptions.LongRunning);
-            INETOptions.Save($"http://127.0.0.1:{ActivePort}/proxy.pac/");
+            INETOptions.Save($"http://127.0.0.1:{ActivePort}/proxy_{ActivePort}.pac/");
         }
     }
 
@@ -176,7 +176,16 @@ public static class Eavesdropper
         HttpContent? originalRequestContent = request.Content;
         try
         {
-            if (request.RequestUri?.OriginalString != "/proxy.pac/")
+            if (request.Headers.Host == $"127.0.0.1:{ActivePort}" &&
+                request.RequestUri?.OriginalString == $"/proxy_{ActivePort}.pac/")
+            {
+                response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(GeneratePAC(), Encoding.ASCII, "application/x-ns-proxy-autoconfig")
+                };
+                Console.WriteLine("PAC Requested: " + request.RequestUri);
+            }
+            else
             {
                 var requestArgs = new RequestInterceptedEventArgs(request);
                 await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
@@ -188,12 +197,6 @@ public static class Eavesdropper
                 var responseArgs = new ResponseInterceptedEventArgs(response);
                 await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
                 if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
-            }
-            else
-            {
-                // TODO: Utilize offline PAC file.
-                response = new HttpResponseMessage(HttpStatusCode.OK);
-                response.Content = new StringContent(GeneratePAC(), null, "application/x-ns-proxy-autoconfig");
             }
             await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
         }

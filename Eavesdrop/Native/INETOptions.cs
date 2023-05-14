@@ -14,6 +14,12 @@ public static class INETOptions
 
     public unsafe static void Save(string? autoConfigUrl = null)
     {
+        if (autoConfigUrl != null)
+        {
+            // Allows for a new PAC file url to be requested(avoid cache) if the previous session was not terminated properly.
+            Save(null);
+        }
+
         const int INTERNET_OPTION_REFRESH = 37;
         const int INTERNET_OPTION_SETTINGS_CHANGED = 39;
         const int INTERNET_OPTION_PER_CONNECTION_OPTION = 75;
@@ -22,9 +28,9 @@ public static class INETOptions
         {
             fixed (char* autoConfigUrlPtr = autoConfigUrl)
             {
-                Span<INETOption> options = stackalloc INETOption[2];
                 ProxyKind kind = string.IsNullOrWhiteSpace(autoConfigUrl) ? ProxyKind.PROXY_TYPE_DIRECT : ProxyKind.PROXY_TYPE_AUTO_PROXY_URL;
 
+                Span<INETOption> options = stackalloc INETOption[2];
                 options[0] = new INETOption(OptionKind.INTERNET_PER_CONN_FLAGS, (int)kind);
                 options[1] = new INETOption(OptionKind.INTERNET_PER_CONN_AUTOCONFIG_URL, autoConfigUrlPtr);
 
