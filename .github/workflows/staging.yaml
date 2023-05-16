@@ -3,7 +3,7 @@ name: Internal Deployment
 on:
   push:
     tags:
-    - ${{ vars.TAG_PREFIX }}-v*
+    - test-v*
 
 env:
   PACKAGE_OUTPUT: ${{ github.workspace }}\package
