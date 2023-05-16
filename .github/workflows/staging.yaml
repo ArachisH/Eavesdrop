@@ -3,10 +3,14 @@ name: Internal Deployment
 on:
   push:
     tags:
-    - "test.v*"
+    - ${{ vars.TAG_PREFIX }}-v*
+
+env:
+  PACKAGE_OUTPUT: ${{ github.workspace }}/package
 
 jobs:
   staging:
+    environment: Staging
     runs-on: [self-hosted, windows]
     steps:
 
@@ -30,4 +34,7 @@ jobs:
       run: dotnet test --configuration Release --no-restore --no-build --verbosity normal
 
     - name: Packing (Release w/ Symbols)
-      run: dotnet pack --configuration Release --no-build --no-restore --verbosity normal --include-symbols
+      run: dotnet pack --configuration Release --no-build --no-restore --verbosity normal --include-symbols --output ${{ env.PACKAGE_OUTPUT }}
+      
+    - name: Pushing (Internal Repository)
+      run: dotnet nuget push ${{ env.PACKAGE_OUTPUT }}\*.nupkg -k ${{ secrets.REPOSITORY_KEY }} -s ${{ secrets.REPOSITORY_SOURCE }}
