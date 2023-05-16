@@ -1,0 +1,33 @@
+name: Internal Deployment
+
+on:
+  push:
+    tags:
+    - "test.v*"
+
+jobs:
+  staging:
+    runs-on: [self-hosted, windows]
+    steps:
+
+    - uses: actions/checkout@v3
+      name: Git Checkout
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-dotnet@v3
+      name: .NET Setup
+      with:
+        dotnet-version: 7.0.x
+
+    - name: Restoring
+      run: dotnet restore --verbosity normal
+
+    - name: Building (Release)
+      run: dotnet build --configuration Release --no-restore --verbosity normal
+
+    - name: Testing (Release)
+      run: dotnet test --configuration Release --no-restore --no-build --verbosity normal
+
+    - name: Packing (Release w/ Symbols)
+      run: dotnet pack --configuration Release --no-build --no-restore --verbosity normal --include-symbols
