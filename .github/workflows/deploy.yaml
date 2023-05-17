@@ -35,7 +35,9 @@ jobs:
       
     - name: Display GitVersion Variables
       run: |
-        echo "NuGet Package Version: v${{ env.GitVersion_MajorMinorPatch }}"
+        echo "NuGet Package Version: ${{ env.GitVersion_MajorMinorPatch }}"
+        echo "PreReleaseLabel: ${{ env.GitVersion_PreReleaseLabel }}"
+        echo "PreReleaseTagWithDash: ${{ env.GitVersion_PreReleaseTagWithDash }}"
       
     - name: Restoring
       run: dotnet restore --verbosity normal
@@ -47,7 +49,7 @@ jobs:
       run: dotnet test --configuration Release --no-restore --no-build --verbosity normal
 
     - name: Packing (Release w/ Symbols)
-      run: dotnet pack --configuration Release --no-restore --no-build --verbosity normal --include-symbols --output ${{ env.PACKAGE_OUTPUT }} /p:Version=v${{ env.GitVersion_MajorMinorPatch }}"
+      run: dotnet pack --configuration Release --no-restore --no-build --verbosity normal --include-symbols --output ${{ env.PACKAGE_OUTPUT }} /p:Version=${{ env.GitVersion_MajorMinorPatch }}
 
     - name: Pushing (Internal Repository)
       run: dotnet nuget push ${{ env.PACKAGE_OUTPUT }}\*.nupkg -k ${{ secrets.REPOSITORY_KEY }} -s ${{ secrets.REPOSITORY_SOURCE }}
