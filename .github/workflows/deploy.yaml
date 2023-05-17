@@ -3,7 +3,7 @@ name: NuGet Package Deployment
 on:
   push:
     tags:
-      - v*-test
+      - v*
       
 env:
   PACKAGE_OUTPUT: ${{ github.workspace }}\package
