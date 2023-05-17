@@ -2,6 +2,8 @@ name: Restore | Build | Test
 
 on:
   push:
+    tags-ignore:
+      - '*'
   workflow_dispatch:
   
 jobs:
