@@ -3,7 +3,7 @@ name: Internal Deployment
 on:
   push:
     tags:
-    - test-v*
+    - v*-test
 
 env:
   PACKAGE_OUTPUT: ${{ github.workspace }}\package
@@ -12,17 +12,22 @@ jobs:
   staging:
     environment: Staging
     runs-on: [self-hosted, windows]
+    
     steps:
-
-    - uses: actions/checkout@v3
-      name: Git Checkout
+    - name: Git Checkout
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-dotnet@v3
-      name: .NET Setup
+    - name: .NET Setup
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: 7.0.x
+        
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v0
+      with:
+        versionSpec: 5.x
 
     - name: Restoring
       run: dotnet restore --verbosity normal
@@ -34,7 +39,7 @@ jobs:
       run: dotnet test --configuration Release --no-restore --no-build --verbosity normal
 
     - name: Packing (Release w/ Symbols)
-      run: dotnet pack --configuration Release --no-build --no-restore --verbosity normal --include-symbols --output ${{ env.PACKAGE_OUTPUT }}
+      run: dotnet pack --configuration Release --no-restore --no-build --verbosity normal --include-symbols --output ${{ env.PACKAGE_OUTPUT }}
 
     - name: Pushing (Internal Repository)
       run: dotnet nuget push ${{ env.PACKAGE_OUTPUT }}\*.nupkg -k ${{ secrets.REPOSITORY_KEY }} -s ${{ secrets.REPOSITORY_SOURCE }}
