@@ -1,10 +1,12 @@
-name: Internal Deployment
+name: NuGet Package Deployment
 
 on:
   workflow_dispatch:
   push:
+    branches:
+      - develop-*
     tags:
-    - v*-test
+      - v*-test
 
 env:
   PACKAGE_OUTPUT: ${{ github.workspace }}\package
