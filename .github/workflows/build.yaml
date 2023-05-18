@@ -3,7 +3,7 @@ name: Restore | Build | Test
 on:
   push:
     tags-ignore:
-      - '*'
+      - 'v*'
   workflow_dispatch:
   
 jobs:
