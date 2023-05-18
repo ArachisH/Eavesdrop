@@ -1,7 +1,9 @@
-name: Build & Test < Self-Hosted >
+name: Restore | Build | Test
 
 on:
   push:
+    tags-ignore:
+      - '*'
   workflow_dispatch:
   
 jobs:
@@ -17,13 +19,13 @@ jobs:
     - uses: actions/setup-dotnet@v3
       name: .NET Setup
       with:
-        dotnet-version: 6.0.x
+        dotnet-version: 7.0.x
 
     - name: Restoring
       run: dotnet restore --verbosity normal
 
-    - name: Building
-      run: dotnet build --no-restore --verbosity normal
+    - name: Building (Release)
+      run: dotnet build --configuration Release --no-restore --verbosity normal
 
-    - name: Testing
-      run: dotnet test --no-restore --no-build --verbosity normal
+    - name: Testing (Release)
+      run: dotnet test --configuration Release --no-restore --no-build --verbosity normal

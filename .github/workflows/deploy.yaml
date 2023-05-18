@@ -1,0 +1,55 @@
+name: NuGet Package Deployment
+
+on:
+  push:
+    tags:
+      - v*
+      
+env:
+  PACKAGE_OUTPUT: ${{ github.workspace }}\package
+
+jobs:
+  staging:
+    environment: Production
+    runs-on: [self-hosted, windows]
+    
+    steps:
+    - name: Git Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: .NET Setup
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 7.0.x
+        
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v0
+      with:
+        versionSpec: 5.x
+
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v0
+      
+    - name: Display GitVersion Variables
+      run: |
+        echo "NuGet Package Version: ${{ env.GitVersion_MajorMinorPatch }}"
+        echo "PreReleaseLabel: ${{ env.GitVersion_PreReleaseLabel }}"
+        echo "PreReleaseTagWithDash: ${{ env.GitVersion_PreReleaseTagWithDash }}"
+      
+    - name: Restoring
+      run: dotnet restore --verbosity normal
+
+    - name: Building (Release)
+      run: dotnet build --configuration Release --no-restore --verbosity normal
+
+    - name: Testing (Release)
+      run: dotnet test --configuration Release --no-restore --no-build --verbosity normal
+
+    - name: Packing (Release w/ Symbols)
+      run: dotnet pack --configuration Release --no-restore --no-build --verbosity normal --include-symbols --output ${{ env.PACKAGE_OUTPUT }} /p:Version=${{ env.GitVersion_MajorMinorPatch }}
+
+    - name: Pushing (Internal Repository)
+      run: dotnet nuget push ${{ env.PACKAGE_OUTPUT }}\*.nupkg -k ${{ secrets.REPOSITORY_KEY }} -s ${{ secrets.REPOSITORY_SOURCE }}
