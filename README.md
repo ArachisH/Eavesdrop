@@ -1,5 +1,6 @@
 # Eavesdrop
 ![Build CI](https://github.com/ArachisH/Eavesdrop/actions/workflows/build.yaml/badge.svg)
+![Nuget](https://img.shields.io/nuget/v/Eavesdrop?label=NuGet)
 ![License](https://img.shields.io/github/license/ArachisH/Eavesdrop?label=License)
 
 HTTP(S) proxy server for Windows machines that allows for the interception, and modification of all HTTP/HTTPS traffic.
@@ -17,11 +18,11 @@ HTTP/2 is **not** a currently supported protocol, as well as the following HTTP/
 ## Configuring
 
 ### Generating & Installing the Certificate Authority
-Before we can begin intercepting HTTPS requests from the machine, we first need to install a self-sign certificate into the root store of the machine to act as the CA for the certificates we will be creating while intercepting the HTTPS requests.
+Before we can begin intercepting HTTPS requests from the machine, we first need to install a self-signed certificate into the root store of the machine. This certificate will act as the CA for the subsequent certificates we will be issuing to every domain/request intercepted that requires encryption(HTTPS).
 ```cs
 bool success = Eavesdropper.Certifier.CreateTrustedRootCertificate();
 ```
-The result of this method will let us know if permission was granted to the root store, and if the installation of the CA into the root store succeeded. If the CA was installed with an elevated application process, then you will also require elevated permissions to remove the CA from the root store.
+The result of this method will let us know if permission was granted by the user for installation into the root store, and if the installation of the CA into the root store succeeded. If the CA was installed with an elevated application process, then you will also require elevated permissions to remove the CA from the root store.
 
 ### Whitelisting & Blacklisting Hosts
 There is one list we can modify to either whitelist, or blacklist hosts whose behavior is determined by the value of the property 'IsProxyingTargets'. By default any host added to 'Targets' will **not** be proxied, but if 'IsProxyingTargets' is set to *true* then **only** the hosts that exist in 'Targets' will be intercepted.
@@ -92,7 +93,7 @@ The PAC file is created based on the configuration you applied beforehand, and g
 
 ---
 ## Termination
-Once you are finished, we can call the 'Terminate' to remove the PAC URL from the machine, and gracefully kill the server.
+Once you are finished, we can call the 'Terminate' method to remove the PAC URL from the machine's settings, and gracefully kill the server.
 ```cs
 Eavesdropper.Terminate();
 ```
