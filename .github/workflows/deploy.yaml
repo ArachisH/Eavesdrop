@@ -9,7 +9,7 @@ env:
   PACKAGE_OUTPUT: ${{ github.workspace }}\package
 
 jobs:
-  staging:
+  deploy:
     environment: Production
     runs-on: [self-hosted, windows]
     
