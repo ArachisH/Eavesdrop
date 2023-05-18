@@ -45,7 +45,7 @@ public static class Eavesdropper
     public static int ActivePort { get; private set; }
     public static bool IsRunning { get; private set; }
     public static List<string> Targets { get; private set; }
-    public static List<string> IntranetDomains { get; private set; }
+    public static List<string> IntranetHosts { get; private set; }
 
     public static bool IsProxyingTargets { get; set; }
     public static bool IsProxyingPrivateNetworks { get; set; }
@@ -61,7 +61,7 @@ public static class Eavesdropper
         _httpClientHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
 
         Targets = new List<string>();
-        IntranetDomains = new List<string>();
+        IntranetHosts = new List<string>();
         Certifier = new Certifier("Eavesdrop", "Eavesdrop Root Certificate Authority");
     }
 
@@ -118,13 +118,13 @@ public static class Eavesdropper
                         shExpMatch(hostIP, "192.168.*")
                 """);
 
-            if (IntranetDomains.Count > 0)
+            if (IntranetHosts.Count > 0)
             {
-                for (int i = 0; i < IntranetDomains.Count; i++)
+                for (int i = 0; i < IntranetHosts.Count; i++)
                 {
                     pacBuilder.Append($$"""
                          ||
-                                shExpMatch(host, "{{IntranetDomains[i]}}")
+                                shExpMatch(host, "{{IntranetHosts[i]}}")
                         """);
                 }
             }
