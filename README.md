@@ -43,7 +43,7 @@ Eavesdropper.Targets.Add("*microsoft.com");
 // https://stackoverflow.com            - NOT INTERCEPTED < Implicitly Blacklisted
 // https://support.microsoft.com/en-us  - INTERCEPTED
 ```
-Notice that the wildcard character is used as a pre-fix to the host, and is not followed by a period('\*.github.com'). This is to ensure that URLs with no sub-domain are still captured/filtered by the PAC file, otherwise some requests might slip by.
+Notice that the wildcard character is used as a prefix to the host, and is not followed by a period('\*.github.com'). This is to ensure that URLs with no sub-domain are still captured/filtered by the PAC file, otherwise some requests might slip by.
 
 ### Internal Hosts
 If you have services that exist on your local network that you do not wish to be intercepted when accessing them on your machine, then we don't need to do any additional work if they're being accessed via IP address(https://192.168.1.10). The default behavior is to ignore any request being made to a private subnet, but this is not the case for hosts that are setup in your local DNS server that link to these services(except *.local*). For these scenarios we need to explicitly state which hosts are part of our local network via the 'IntranetHosts' list.
