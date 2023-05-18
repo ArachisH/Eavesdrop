@@ -10,7 +10,7 @@ HTTP(S) proxy server for Windows machines that allows for the interception, and 
 * Blacklist, and whitelist specific hosts with wildcard support.
 * HTTP/1.1 Chunked transfer encoding which allows for the streaming of data/headers without buffering the entire response content.
 
-* HTTP/2 is not a currently supported protocol, as well as the following HTTP/1.X features:
+HTTP/2 is **not** a currently supported protocol, as well as the following HTTP/1.X features:
 * Keep-Alive - Allows for the same connection to be used for multiple requests, and responses
 * Upgrade - Allows for switching to different protocols other than HTTP on the same connection. (eg. WebSocket)
 ---
