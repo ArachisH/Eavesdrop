@@ -34,7 +34,7 @@ There is one list we can modify to either whitelist, or blacklist hosts whose be
 // https://docs.github.com/en   - INTERCEPTED < Implicitly Whitelisted
 Eavesdropper.Targets.Add("*google.com");
 ```
-If you wish to go with a more direct approach, we can set 'IsProxyingTargets' to **true** to explicitly specify whichs hosts to intercept.
+If you wish to go with a more direct approach, we can set 'IsProxyingTargets' to **true** to explicitly specify which hosts to intercept.
 ```cs
 // The hosts that have been added to Targets are the only ones to be intercepted
 IsProxyingTargets = true;
