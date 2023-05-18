@@ -21,7 +21,7 @@ public class Program
             //Eavesdropper.IsProxyingPrivateNetworks = true;
 
             // Alternatively, we can include domains that only exist on your private network.
-            //Eavesdropper.IntranetDomains.Add("*myLocalDomain");
+            //Eavesdropper.IntranetHosts.Add("*myLocalHost.domain");
 
             Eavesdropper.Initiate(12086);
             Console.WriteLine("Press any key to terminate the application at any time...");
