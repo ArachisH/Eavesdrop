@@ -1,6 +1,6 @@
 # Eavesdrop
-![Build CI](https://github.com/ArachisH/Eavesdrop/actions/workflows/build.yaml/badge.svg)
-![Nuget](https://img.shields.io/nuget/v/Eavesdrop?label=NuGet)
+[![Build CI](https://github.com/ArachisH/Eavesdrop/actions/workflows/build.yaml/badge.svg)](https://github.com/ArachisH/Eavesdrop/actions)
+[![NuGet](https://img.shields.io/nuget/v/Eavesdrop?label=NuGet)](https://www.nuget.org/packages/Eavesdrop)
 ![License](https://img.shields.io/github/license/ArachisH/Eavesdrop?label=License)
 
 HTTP(S) proxy server for Windows machines that allows for the interception, and modification of all HTTP/HTTPS traffic.
