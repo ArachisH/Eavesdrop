@@ -183,7 +183,6 @@ public static class Eavesdropper
                 {
                     Content = new StringContent(GeneratePAC(), Encoding.ASCII, "application/x-ns-proxy-autoconfig")
                 };
-                Console.WriteLine("PAC Requested: " + request.RequestUri);
             }
             else
             {
