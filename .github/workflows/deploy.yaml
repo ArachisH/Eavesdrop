@@ -1,4 +1,4 @@
-name: NuGet Package Deployment
+name: 'Deploy: Production'
 
 on:
   push:
@@ -6,12 +6,13 @@ on:
       - 'v*'
       
 env:
-  PACKAGE_OUTPUT: ${{ github.workspace }}\package
+  PACKAGE_OUTPUT: ${{ github.workspace }}/package
 
 jobs:
+
   deploy:
-    environment: Production
     runs-on: ubuntu-latest
+    environment: Production
     
     steps:
     - name: Git Checkout
@@ -43,7 +44,7 @@ jobs:
       run: dotnet test --configuration Release --no-restore --no-build --verbosity normal
 
     - name: Packing (w/ Symbols)
-      run: dotnet pack --configuration Release --no-restore --no-build --verbosity normal --output ${{ env.PACKAGE_OUTPUT }} /p:Version=${{ env.GitVersion_MajorMinorPatch }} -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
+      run: dotnet pack --configuration Release --no-restore --no-build --verbosity normal --output ${{ env.PACKAGE_OUTPUT }} -p:Version=${{ env.GitVersion_SemVer }} -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
 
     - name: Pushing
-      run: dotnet nuget push ${{ env.PACKAGE_OUTPUT }}\*.nupkg -k ${{ secrets.REPOSITORY_KEY }} -s ${{ secrets.REPOSITORY_SOURCE }}
+      run: dotnet nuget push ${{ env.PACKAGE_OUTPUT }}/*.nupkg -k ${{ secrets.REPOSITORY_KEY }} -s ${{ secrets.REPOSITORY_SOURCE }}
