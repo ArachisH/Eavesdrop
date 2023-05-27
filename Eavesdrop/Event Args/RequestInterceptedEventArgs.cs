@@ -5,25 +5,25 @@ namespace Eavesdrop;
 
 public sealed class RequestInterceptedEventArgs : CancelEventArgs
 {
-    private readonly HttpRequestMessage _request;
-
     public HttpMethod Method
     {
-        get => _request.Method;
-        set => _request.Method = value;
+        get => Request.Method;
+        set => Request.Method = value;
     }
     public HttpContent? Content
     {
-        get => _request.Content;
-        set => _request.Content = value;
+        get => Request.Content;
+        set => Request.Content = value;
     }
 
-    public Uri? Uri => _request.RequestUri;
-    public Version Version => _request.Version;
-    public HttpRequestHeaders Headers => _request.Headers;
+    public Uri? Uri => Request.RequestUri;
+    public Version Version => Request.Version;
+    public HttpRequestHeaders Headers => Request.Headers;
+
+    public HttpRequestMessage Request { get; set; }
 
     public RequestInterceptedEventArgs(HttpRequestMessage request)
     {
-        _request = request;
+        Request = request;
     }
 }

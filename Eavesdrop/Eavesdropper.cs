@@ -169,42 +169,49 @@ public static class Eavesdropper
     {
         using var local = new EavesNode(client, Certifier);
 
-        HttpResponseMessage? response = null;
-        HttpContent? originalResponseContent = null;
+        RequestInterceptedEventArgs? requestArgs = null;
+        ResponseInterceptedEventArgs? responseArgs = null;
 
-        HttpRequestMessage request = await local.ReceiveHttpRequestAsync(cancellationToken).ConfigureAwait(false);
-        HttpContent? originalRequestContent = request.Content;
+        HttpResponseMessage? ogResponse = null;
+        HttpRequestMessage ogRequest = await local.ReceiveHttpRequestAsync(cancellationToken).ConfigureAwait(false);
+
+        HttpContent? originalResponseContent = null;
+        HttpContent? originalRequestContent = ogRequest.Content;
+
         try
         {
-            if (request.Headers.Host == $"127.0.0.1:{ActivePort}" &&
-                request.RequestUri?.OriginalString == $"/proxy_{ActivePort}.pac/")
+            if (ogRequest.Headers.Host == $"127.0.0.1:{ActivePort}" && ogRequest.RequestUri?.OriginalString == $"/proxy_{ActivePort}.pac/")
             {
-                response = new HttpResponseMessage(HttpStatusCode.OK)
+                ogResponse = new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(GeneratePAC(), Encoding.ASCII, "application/x-ns-proxy-autoconfig")
                 };
+                await local.SendHttpResponseAsync(ogResponse, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                var requestArgs = new RequestInterceptedEventArgs(request);
+                requestArgs = new RequestInterceptedEventArgs(ogRequest);
                 await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
                 if (requestArgs.Cancel || cancellationToken.IsCancellationRequested) return;
 
-                response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                originalResponseContent = response.Content;
+                ogResponse = await _httpClient.SendAsync(requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                originalResponseContent = ogResponse.Content; // Store it so we can dispose of it if the user decides to replace the content.
 
-                var responseArgs = new ResponseInterceptedEventArgs(response);
+                responseArgs = new ResponseInterceptedEventArgs(ogResponse);
                 await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
+
                 if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
+                await local.SendHttpResponseAsync(responseArgs.Response, cancellationToken).ConfigureAwait(false);
             }
-            await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
-            request.Dispose();
+            ogRequest.Dispose();
+            requestArgs?.Request?.Dispose();
             originalRequestContent?.Dispose();
 
-            response?.Dispose();
+            ogResponse?.Dispose();
+            responseArgs?.Response?.Dispose();
             originalResponseContent?.Dispose();
         }
     }

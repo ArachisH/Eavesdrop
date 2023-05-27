@@ -6,39 +6,38 @@ namespace Eavesdrop;
 
 public sealed class ResponseInterceptedEventArgs : CancelEventArgs
 {
-    private readonly HttpResponseMessage _response;
-
     public Uri? Uri => Request?.RequestUri;
-    public HttpRequestMessage? Request => _response.RequestMessage;
+    public HttpRequestMessage? Request => Response.RequestMessage;
+    public bool IsSuccessStatusCode => Response.IsSuccessStatusCode;
 
     public Version Version
     {
-        get => _response.Version;
-        set => _response.Version = value;
+        get => Response.Version;
+        set => Response.Version = value;
     }
     public HttpContent Content
     {
-        get => _response.Content;
-        set => _response.Content = value;
+        get => Response.Content;
+        set => Response.Content = value;
     }
     public string? ReasonPhrase
     {
-        get => _response.ReasonPhrase;
-        set => _response.ReasonPhrase = value;
+        get => Response.ReasonPhrase;
+        set => Response.ReasonPhrase = value;
     }
     public HttpStatusCode StatusCode
     {
-        get => _response.StatusCode;
-        set => _response.StatusCode = value;
+        get => Response.StatusCode;
+        set => Response.StatusCode = value;
     }
 
-    public bool IsSuccessStatusCode => _response.IsSuccessStatusCode;
+    public HttpResponseHeaders Headers => Response.Headers;
+    public HttpResponseHeaders TrailingHeaders => Response.TrailingHeaders;
 
-    public HttpResponseHeaders Headers => _response.Headers;
-    public HttpResponseHeaders TrailingHeaders => _response.TrailingHeaders;
+    public HttpResponseMessage Response { get; set; }
 
     public ResponseInterceptedEventArgs(HttpResponseMessage response)
     {
-        _response = response;
+        Response = response;
     }
 }
