@@ -9,6 +9,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
+		<Version>1.1.0</Version>
 		<Title>Eavesdropper</Title>
 		<Authors>ArachisH</Authors>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
