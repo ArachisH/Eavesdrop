@@ -21,6 +21,9 @@ public sealed class RequestInterceptedEventArgs : CancelEventArgs
     public HttpRequestHeaders Headers => Request.Headers;
 
     public HttpRequestMessage Request { get; set; }
+    public HttpResponseMessage? Response { get; set; }
+
+    public bool IsInterceptingResponse { get; set; } = true;
 
     public RequestInterceptedEventArgs(HttpRequestMessage request)
     {

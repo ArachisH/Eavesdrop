@@ -172,6 +172,7 @@ public static class Eavesdropper
         RequestInterceptedEventArgs? requestArgs = null;
         ResponseInterceptedEventArgs? responseArgs = null;
 
+        // Keep track of the originally created request/response objects, as they still need to be disposed of at the end of the method if they were to be replaced with another instance.
         HttpResponseMessage? ogResponse = null;
         HttpRequestMessage ogRequest = await local.ReceiveHttpRequestAsync(cancellationToken).ConfigureAwait(false);
 
@@ -186,7 +187,6 @@ public static class Eavesdropper
                 {
                     Content = new StringContent(GeneratePAC(), Encoding.ASCII, "application/x-ns-proxy-autoconfig")
                 };
-                await local.SendHttpResponseAsync(ogResponse, cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -194,15 +194,21 @@ public static class Eavesdropper
                 await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
                 if (requestArgs.Cancel || cancellationToken.IsCancellationRequested) return;
 
-                ogResponse = await _httpClient.SendAsync(requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                originalResponseContent = ogResponse.Content; // Store it so we can dispose of it if the user decides to replace the content.
+                ogResponse = requestArgs.Response ??
+                    await _httpClient.SendAsync(requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
-                responseArgs = new ResponseInterceptedEventArgs(ogResponse);
-                await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
+                // This flag is meant to de-clutter the interception pipeline, in the case that a request has already been provided a response we're aware of.
+                if (requestArgs.IsInterceptingResponse)
+                {
+                    originalResponseContent = ogResponse.Content; // Store it so we can dispose of it if the user decides to replace the content.
 
-                if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
-                await local.SendHttpResponseAsync(responseArgs.Response, cancellationToken).ConfigureAwait(false);
+                    responseArgs = new ResponseInterceptedEventArgs(ogResponse);
+                    await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
+
+                    if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
+                }
             }
+            await local.SendHttpResponseAsync(responseArgs?.Response ?? ogResponse, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
