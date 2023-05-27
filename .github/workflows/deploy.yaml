@@ -3,7 +3,7 @@ name: NuGet Package Deployment
 on:
   push:
     tags:
-      - v*
+      - 'v*'
       
 env:
   PACKAGE_OUTPUT: ${{ github.workspace }}\package
@@ -11,7 +11,7 @@ env:
 jobs:
   deploy:
     environment: Production
-    runs-on: [self-hosted, windows]
+    runs-on: ubuntu-latest
     
     steps:
     - name: Git Checkout
@@ -27,29 +27,23 @@ jobs:
     - name: Install GitVersion
       uses: gittools/actions/gitversion/setup@v0
       with:
-        versionSpec: 5.x
+        versionSpec: '6.x'
+        includePrerelease: true
 
     - name: Determine Version
-      id: gitversion
       uses: gittools/actions/gitversion/execute@v0
-      
-    - name: Display GitVersion Variables
-      run: |
-        echo "NuGet Package Version: ${{ env.GitVersion_MajorMinorPatch }}"
-        echo "PreReleaseLabel: ${{ env.GitVersion_PreReleaseLabel }}"
-        echo "PreReleaseTagWithDash: ${{ env.GitVersion_PreReleaseTagWithDash }}"
       
     - name: Restoring
       run: dotnet restore --verbosity normal
 
-    - name: Building (Release)
+    - name: Building
       run: dotnet build --configuration Release --no-restore --verbosity normal
 
-    - name: Testing (Release)
+    - name: Testing
       run: dotnet test --configuration Release --no-restore --no-build --verbosity normal
 
-    - name: Packing (Release w/ Symbols)
+    - name: Packing (w/ Symbols)
       run: dotnet pack --configuration Release --no-restore --no-build --verbosity normal --output ${{ env.PACKAGE_OUTPUT }} /p:Version=${{ env.GitVersion_MajorMinorPatch }} -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
 
-    - name: Pushing (Internal Repository)
+    - name: Pushing
       run: dotnet nuget push ${{ env.PACKAGE_OUTPUT }}\*.nupkg -k ${{ secrets.REPOSITORY_KEY }} -s ${{ secrets.REPOSITORY_SOURCE }}
