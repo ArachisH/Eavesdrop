@@ -24,7 +24,10 @@ public class EavesNodeTests
 
             using X509Certificate2 certificate = certificateRequest.CreateSelfSigned(DateTime.Now, DateTime.Now.AddDays(1));
 
-            certificate.FriendlyName = certificateName;
+            if (OperatingSystem.IsWindows())
+            {
+                certificate.FriendlyName = certificateName;
+            }
             return new X509Certificate2(certificate.Export(X509ContentType.Pfx));
         }
     }

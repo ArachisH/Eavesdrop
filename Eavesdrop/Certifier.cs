@@ -68,7 +68,6 @@ public sealed class Certifier : ICertifier, IDisposable
     public X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
         using var rsa = RSA.Create(KeyLength);
-
         var certificateRequest = new CertificateRequest(subjectName, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         if (Authority == null)
         {
@@ -77,7 +76,10 @@ public sealed class Certifier : ICertifier, IDisposable
 
             using X509Certificate2 certificate = certificateRequest.CreateSelfSigned(NotBefore.ToUniversalTime(), NotAfter.ToUniversalTime());
 
-            certificate.FriendlyName = alternateName;
+            if (OperatingSystem.IsWindows())
+            {
+                certificate.FriendlyName = alternateName;
+            }
             return new X509Certificate2(certificate.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
         }
         else
@@ -92,7 +94,10 @@ public sealed class Certifier : ICertifier, IDisposable
             using X509Certificate2 certificate = certificateRequest.Create(Authority, Authority.NotBefore, Authority.NotAfter, Guid.NewGuid().ToByteArray());
             using X509Certificate2 certificateWithPrivateKey = certificate.CopyWithPrivateKey(rsa);
 
-            certificateWithPrivateKey.FriendlyName = alternateName;
+            if (OperatingSystem.IsWindows())
+            {
+                certificateWithPrivateKey.FriendlyName = alternateName;
+            }
             return new X509Certificate2(certificateWithPrivateKey.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
         }
     }
