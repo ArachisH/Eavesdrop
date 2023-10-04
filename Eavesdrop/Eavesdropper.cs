@@ -42,6 +42,7 @@ public static class Eavesdropper
 
     public static Certifier Certifier { get; set; }
 
+    public static string? PACHeader { get; set; }
     public static int ActivePort { get; private set; }
     public static bool IsRunning { get; private set; }
     public static List<string> Targets { get; private set; }
@@ -108,6 +109,13 @@ public static class Eavesdropper
         pacBuilder.AppendLine("        hostIP = host;");
         pacBuilder.AppendLine("    else");
         pacBuilder.AppendLine("        hostIP = 0;");
+
+        if (!string.IsNullOrWhiteSpace(PACHeader))
+        {
+            pacBuilder.AppendLine("\r\n// <-------- HEADER START -------->");
+            pacBuilder.Append(PACHeader);
+            pacBuilder.AppendLine("\r\n// <-------- HEADER END ---------->");
+        }
 
         if (IsOnlyInterceptingHTTP)
         {
