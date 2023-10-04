@@ -6,7 +6,19 @@ public class Program
 {
     public static void Main()
     {
-        if (Eavesdropper.Certifier.CreateTrustedRootCertificate())
+
+        // Explicitly state whether to intercept HTTP traffic ONLY.
+        // Default = false
+        Eavesdropper.IsOnlyInterceptingHTTP = false;
+
+        // Alternatively, we can replicate this flag by inserting a custom script into the top of the PAC file.
+        // PAC Documentation: http://findproxyforurl.com/example-pac-file/
+        Eavesdropper.PACHeader = """
+                    if (url.substring(0, 5) == "https")
+                        return "DIRECT";
+                """;
+
+        if (Eavesdropper.IsOnlyInterceptingHTTP || Eavesdropper.Certifier.CreateTrustedRootCertificate())
         {
             Eavesdropper.RequestInterceptedAsync += Eavesdropper_RequestInterceptedAsync;
             Eavesdropper.ResponseInterceptedAsync += Eavesdropper_ResponseInterceptedAsync;
