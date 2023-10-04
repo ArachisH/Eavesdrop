@@ -48,6 +48,7 @@ public static class Eavesdropper
     public static List<string> IntranetHosts { get; private set; }
 
     public static bool IsProxyingTargets { get; set; }
+    public static bool IsOnlyInterceptingHTTP { get; set; }
     public static bool IsProxyingPrivateNetworks { get; set; }
 
     static Eavesdropper()
@@ -107,6 +108,16 @@ public static class Eavesdropper
         pacBuilder.AppendLine("        hostIP = host;");
         pacBuilder.AppendLine("    else");
         pacBuilder.AppendLine("        hostIP = 0;");
+
+        if (IsOnlyInterceptingHTTP)
+        {
+            pacBuilder.Append("""
+
+                    if (url.substring(0, 5) == "https")
+                        return "DIRECT";
+
+                """);
+        }
 
         if (!IsProxyingPrivateNetworks)
         {
