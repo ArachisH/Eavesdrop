@@ -43,7 +43,7 @@ public sealed class EavesNode : IDisposable
             ["CONNECT"] = HttpMethod.Connect
         };
     }
-    public EavesNode(Socket socket, ICertifier? certifier, bool isHandlingConnectRequests)
+    public EavesNode(Socket socket, ICertifier? certifier, bool isHandlingConnectRequests = true)
     {
         IsHandlingConnectRequests = isHandlingConnectRequests;
 
