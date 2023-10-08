@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Text;
+using System.Buffers;
 using System.Net.Sockets;
 
 using Eavesdrop.Network;
@@ -40,7 +41,8 @@ public static class Eavesdropper
         }
     }
 
-    public static Certifier Certifier { get; set; }
+    public static Certifier? Certifier { get; set; }
+    public static Certifier DefaultCertifier { get; }
 
     public static string? PACHeader { get; set; }
     public static int ActivePort { get; private set; }
@@ -51,20 +53,29 @@ public static class Eavesdropper
     public static bool IsProxyingTargets { get; set; }
     public static bool IsOnlyInterceptingHTTP { get; set; }
     public static bool IsProxyingPrivateNetworks { get; set; }
+    public static bool IsActingAsForwardingServer { get; set; }
+
+    public static IWebProxy? Proxy
+    {
+        get => _httpClientHandler.Proxy;
+        set => _httpClientHandler.Proxy = value;
+    }
 
     static Eavesdropper()
     {
         _stateLock = new object();
-        _httpClientHandler = new HttpClientHandler { UseProxy = false };
+        _httpClientHandler = new HttpClientHandler
+        {
+            UseProxy = false, // The proxying of requests will be handled manually to be able to avoid any data interception.
+            AllowAutoRedirect = false,
+            CheckCertificateRevocationList = false,
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
         _httpClient = new HttpClient(_httpClientHandler);
-
-        _httpClientHandler.AllowAutoRedirect = false;
-        _httpClientHandler.CheckCertificateRevocationList = false;
-        _httpClientHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
 
         Targets = new List<string>();
         IntranetHosts = new List<string>();
-        Certifier = new Certifier("Eavesdrop", "Eavesdrop Root Certificate Authority");
+        Certifier = DefaultCertifier = new Certifier("Eavesdrop", "Eavesdrop Root Certificate Authority");
     }
 
     public static void Terminate()
@@ -76,6 +87,8 @@ public static class Eavesdropper
 
             _listener?.Close();
             _listener = null;
+
+            _httpClient.CancelPendingRequests();
         }
     }
     public static void Initiate(int port)
@@ -186,20 +199,22 @@ public static class Eavesdropper
     }
     private static async Task HandleSocketAsync(Socket client, CancellationToken cancellationToken = default)
     {
-        using var local = new EavesNode(client, Certifier);
+        using var local = new EavesNode(client, Certifier, IsActingAsForwardingServer);
 
         RequestInterceptedEventArgs? requestArgs = null;
         ResponseInterceptedEventArgs? responseArgs = null;
 
         // Keep track of the originally created request/response objects, as they still need to be disposed of at the end of the method if they were to be replaced with another instance.
+        HttpRequestMessage? ogRequest = null;
         HttpResponseMessage? ogResponse = null;
-        HttpRequestMessage ogRequest = await local.ReceiveHttpRequestAsync(cancellationToken).ConfigureAwait(false);
+        HttpContent? originalResponseContent = null, originalRequestContent = null;
 
-        HttpContent? originalResponseContent = null;
-        HttpContent? originalRequestContent = ogRequest.Content;
-
+        bool wasProxiedExternally = false;
         try
         {
+            ogRequest = await local.ReceiveHttpRequestAsync(cancellationToken).ConfigureAwait(false);
+            originalRequestContent = ogRequest.Content;
+
             if (ogRequest.Headers.Host == $"127.0.0.1:{ActivePort}" && ogRequest.RequestUri?.OriginalString == $"/proxy_{ActivePort}.pac/")
             {
                 ogResponse = new HttpResponseMessage(HttpStatusCode.OK)
@@ -209,6 +224,26 @@ public static class Eavesdropper
             }
             else
             {
+                if (ogRequest.Method == HttpMethod.Connect && Proxy != null && ogRequest.RequestUri != null)
+                {
+                    string? encodedCredentials = null;
+                    if (Proxy.Credentials != null)
+                    {
+                        NetworkCredential? credentials = Proxy.Credentials.GetCredential(ogRequest.RequestUri, "Basic");
+                        if (credentials == null)
+                        {
+                            throw new Exception("Failed to acquire credentials for the given request target.");
+                        }
+
+                        encodedCredentials = $"{credentials.UserName}:{credentials.Password}";
+                        encodedCredentials = Convert.ToBase64String(Encoding.UTF8.GetBytes(encodedCredentials));
+                        ogRequest.Headers.TryAddWithoutValidation("Proxy-Authorization", $"Basic {encodedCredentials}");
+                    }
+
+                    wasProxiedExternally = true;
+                    ogRequest.RequestUri = Proxy.GetProxy(ogRequest.RequestUri);
+                }
+
                 requestArgs = new RequestInterceptedEventArgs(ogRequest);
                 await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
                 if (requestArgs.Cancel || cancellationToken.IsCancellationRequested) return;
@@ -217,7 +252,8 @@ public static class Eavesdropper
                     await _httpClient.SendAsync(requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
                 // This flag is meant to de-clutter the interception pipeline, in the case that a request has already been provided a response we're aware of.
-                if (requestArgs.IsInterceptingResponse)
+                // Also, check if the async event itself has any subscribers.
+                if (requestArgs.IsInterceptingResponse && ResponseInterceptedAsync != null)
                 {
                     originalResponseContent = ogResponse.Content; // Store it so we can dispose of it if the user decides to replace the content.
 
@@ -227,17 +263,46 @@ public static class Eavesdropper
                     if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
                 }
             }
-            await local.SendHttpResponseAsync(responseArgs?.Response ?? ogResponse, cancellationToken).ConfigureAwait(false);
+
+            HttpResponseMessage response = responseArgs?.Response ?? ogResponse;
+            await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
+            if (wasProxiedExternally)
+            {
+                using Stream remoteStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+
+                Task remoteToLocalClampTask = ClampStreamsAsync(remoteStream, local.Stream);
+                Task localToRemoteClampTask = ClampStreamsAsync(local.Stream, remoteStream);
+
+                // Wait for any of the two streams to exhaust themselves, which should typically indicate that the request/response exchange was completed.
+                await Task.WhenAny(remoteToLocalClampTask, localToRemoteClampTask).ConfigureAwait(false);
+            }
         }
         finally
         {
-            ogRequest.Dispose();
+            ogRequest?.Dispose();
             requestArgs?.Request?.Dispose();
             originalRequestContent?.Dispose();
 
             ogResponse?.Dispose();
             responseArgs?.Response?.Dispose();
             originalResponseContent?.Dispose();
+        }
+    }
+
+    private static async Task ClampStreamsAsync(Stream fromStream, Stream toStream)
+    {
+        // Immediately return to the previous context.
+        await Task.Yield();
+
+        using IMemoryOwner<byte> bufferOwner = MemoryPool<byte>.Shared.Rent(1024);
+        Memory<byte> buffer = bufferOwner.Memory;
+
+        int bytesRead = 0;
+        while (fromStream.CanRead && toStream.CanWrite)
+        {
+            bytesRead = await fromStream.ReadAsync(buffer).ConfigureAwait(false);
+            await toStream.WriteAsync(buffer.Slice(0, bytesRead)).ConfigureAwait(false);
+            await toStream.FlushAsync().ConfigureAwait(false);
         }
     }
 }

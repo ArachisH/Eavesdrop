@@ -24,6 +24,8 @@ public sealed class EavesNode : IDisposable
     private bool _disposed;
     private Stream _stream;
 
+    public Stream Stream => _stream;
+    public bool IsHandlingConnectRequests { get; }
     public bool IsSecure => _stream is SslStream sslStream && sslStream.IsAuthenticated;
 
     static EavesNode()
@@ -38,11 +40,13 @@ public sealed class EavesNode : IDisposable
             ["POST"] = HttpMethod.Post,
             ["PUT"] = HttpMethod.Put,
             ["TRACE"] = HttpMethod.Trace,
-            ["CONNECT"] = new HttpMethod("CONNECT")
+            ["CONNECT"] = HttpMethod.Connect
         };
     }
-    public EavesNode(Socket socket, ICertifier? certifier, string? sessionToken = null)
+    public EavesNode(Socket socket, ICertifier? certifier, bool isHandlingConnectRequests)
     {
+        IsHandlingConnectRequests = isHandlingConnectRequests;
+
         socket.NoDelay = true;
 
         _certifier = certifier;
@@ -65,14 +69,16 @@ public sealed class EavesNode : IDisposable
                 continue;
             }
 
-            if (request?.Method.Method == "CONNECT" && request.RequestUri != null)
+            if (request?.Method == HttpMethod.Connect && request.RequestUri != null)
             {
+                // Return the raw CONNECT request so that it may instead be forwarded to another proxy server.
+                if (IsHandlingConnectRequests) return request;
+
+                await SendHttpResponseAsync(_okResponse, cancellationToken).ConfigureAwait(false);
                 if (_certifier == null)
                 {
                     throw new NotSupportedException("Cannot process HTTPS upgrade without a certifier.");
                 }
-
-                await SendHttpResponseAsync(_okResponse, cancellationToken).ConfigureAwait(false);
 
                 X509Certificate2? certificate = _certifier?.GenerateCertificate(request.RequestUri.DnsSafeHost);
                 if (certificate == null)
@@ -132,7 +138,7 @@ public sealed class EavesNode : IDisposable
 
         responseWriter.AppendLine();
         await responseWriter.WriteToAsync(_stream, cancellationToken).ConfigureAwait(false);
-        if (response.Content == null || response.Content == _okResponse.Content) return;
+        if (response.Content == null || response.Content == _okResponse.Content || response.RequestMessage?.Method == HttpMethod.Connect) return;
 
         if (response.Headers.TransferEncodingChunked == true)
         {
@@ -204,12 +210,9 @@ public sealed class EavesNode : IDisposable
 
         request = new HttpRequestMessage(_httpMethodTable[method], string.Empty);
 
-        if (method == "CONNECT")
-        {
-            request.RequestUri = new Uri("https://" + uri);
-            return true;
-        }
-        else request.RequestUri = new Uri((baseUri?.GetLeftPart(UriPartial.Authority) ?? string.Empty) + uri, UriKind.RelativeOrAbsolute);
+        request.RequestUri = request.Method == HttpMethod.Connect
+            ? new Uri("https://" + uri)
+            : new Uri((baseUri?.GetLeftPart(UriPartial.Authority) ?? string.Empty) + uri, UriKind.RelativeOrAbsolute);
 
         // Parse HTTP Request Headers
         httpHeadersSpan = httpHeadersSpan.Slice(httpHeadersSpan.IndexOf(_eolBytes) + _eolBytes.Length);
