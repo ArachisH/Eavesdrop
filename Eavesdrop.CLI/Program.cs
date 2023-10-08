@@ -6,38 +6,41 @@ public class Program
 {
     public static void Main()
     {
-
-        // Explicitly state whether to intercept HTTP traffic ONLY.
-        // Default = false
+        /* Explicitly state whether to intercept HTTP traffic ONLY. (Default: false) */
         Eavesdropper.IsOnlyInterceptingHTTP = false;
 
-        // Alternatively, we can replicate this flag by inserting a custom script into the top of the PAC file.
-        // PAC Documentation: http://findproxyforurl.com/example-pac-file/
-        Eavesdropper.PACHeader = """
-                    if (url.substring(0, 5) == "https")
-                        return "DIRECT";
-                """;
+        /* Alternatively, we can replicate the 'IsOnlyInterceptingHTTP = true' flag by inserting a custom script into the top of the PAC file.
+         * PAC Documentation: http://findproxyforurl.com/example-pac-file/ */
+        //Eavesdropper.PACHeader = """
+        //            if (url.substring(0, 5) == "https")
+        //                return "DIRECT";
+        //        """;
 
-        if (Eavesdropper.IsOnlyInterceptingHTTP || Eavesdropper.Certifier.CreateTrustedRootCertificate())
-        {
-            Eavesdropper.RequestInterceptedAsync += Eavesdropper_RequestInterceptedAsync;
-            Eavesdropper.ResponseInterceptedAsync += Eavesdropper_ResponseInterceptedAsync;
+        Eavesdropper.RequestInterceptedAsync += Eavesdropper_RequestInterceptedAsync;
+        Eavesdropper.ResponseInterceptedAsync += Eavesdropper_ResponseInterceptedAsync;
 
-            // Do NOT intercept Http(s) requests from the google domain.
-            Eavesdropper.Targets.Add("*google.com");
+        /* Determines whether the provided hostnames below should be blacklisted, or whitelisted. (Default: false) */
+        /* FALSE:   Blacklist Mode */
+        /* TRUE:    Whitelist Mode */
+        Eavesdropper.IsProxyingTargets = true;
+        Eavesdropper.Targets.Add("*google.com");
 
-            // OR ONLY intercept Http(s) from the given list of targets.
-            //Eavesdropper.IsProxyingTargets = true;
+        /* Intercept requests to private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) */
+        //Eavesdropper.IsProxyingPrivateNetworks = true;
 
-            // Intercept requests to private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-            //Eavesdropper.IsProxyingPrivateNetworks = true;
+        /* Alternatively, we can include domains that only exist on your private network. */
+        //Eavesdropper.IntranetHosts.Add("*myLocalHost.domain");
 
-            // Alternatively, we can include domains that only exist on your private network.
-            //Eavesdropper.IntranetHosts.Add("*myLocalHost.domain");
+        /* Setting this property to 'true' means to forward ALL requests to the provided 'Proxy' server. */
+        //Eavesdropper.IsActingAsForwardingServer = true;
+        //Eavesdropper.Proxy = new System.Net.WebProxy("http://10.10.10.10:80");
+        //Eavesdropper.Proxy.Credentials = new System.Net.NetworkCredential("username", "passw0rd!");
 
-            Eavesdropper.Initiate(12086);
-            Console.WriteLine("Press any key to terminate the application at any time...");
-        }
+        /* Otherwise, to be able to decrypt HTTPS traffic, we need to install a self-signed certificate to the root store. */
+        Eavesdropper.Certifier?.CreateTrustedRootCertificate();
+
+        Eavesdropper.Initiate(12086);
+        Console.WriteLine("Press any key to terminate the application at any time...");
 
         Console.ReadKey();
         Eavesdropper.Terminate();
@@ -54,7 +57,7 @@ public class Program
         if (e.Content != null)
         {
             Console.WriteLine("----[ HTTP Request Content ]");
-            Console.WriteLine("    " + Encoding.UTF8.GetString(await e.Content.ReadAsByteArrayAsync()));
+            Console.WriteLine("    " + Encoding.UTF8.GetString(await e.Content.ReadAsByteArrayAsync().ConfigureAwait(false)));
         }
     }
     private static Task Eavesdropper_ResponseInterceptedAsync(object sender, ResponseInterceptedEventArgs e)
