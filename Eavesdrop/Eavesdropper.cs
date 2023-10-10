@@ -10,8 +10,6 @@ namespace Eavesdrop;
 public static class Eavesdropper
 {
     private static readonly object _stateLock;
-    private static readonly HttpClient _httpClient;
-    private static readonly HttpClientHandler _httpClientHandler;
 
     private static string? _pathPAC;
     private static Socket? _listener;
@@ -57,19 +55,11 @@ public static class Eavesdropper
     public static string? PACHeader { get; set; }
     public static int ActivePort { get; private set; }
     public static bool IsRunning { get; private set; }
-    public static List<string> Targets { get; private set; }
-    public static List<string> IntranetHosts { get; private set; }
 
     public static bool IsProxyingTargets { get; set; }
-    public static bool IsOnlyInterceptingHTTP { get; set; }
+    public static bool IsOnlyInterceptingHttp { get; set; }
     public static bool IsProxyingPrivateNetworks { get; set; }
     public static bool IsActingAsForwardingServer { get; set; }
-
-    public static IWebProxy? Proxy
-    {
-        get => _httpClientHandler.Proxy;
-        set => _httpClientHandler.Proxy = value;
-    }
 
     static Eavesdropper()
     {
@@ -80,7 +70,6 @@ public static class Eavesdropper
             CheckCertificateRevocationList = false,
             ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
         };
-        _httpClient = new HttpClient(_httpClientHandler);
 
         _stateLock = new object();
         _originalClient = new HttpClient(Handler);
@@ -147,7 +136,7 @@ public static class Eavesdropper
             pacBuilder.AppendLine("\r\n// <-------- HEADER END ---------->");
         }
 
-        if (IsOnlyInterceptingHTTP)
+        if (IsOnlyInterceptingHttp)
         {
             pacBuilder.Append("""
 
@@ -232,7 +221,7 @@ public static class Eavesdropper
             ogRequest = await local.ReceiveHttpRequestAsync(cancellationToken).ConfigureAwait(false);
             originalRequestContent = ogRequest.Content;
 
-            if (ogRequest.Headers.Host == $"127.0.0.1:{ActivePort}" && ogRequest.RequestUri?.OriginalString == $"/proxy_{ActivePort}.pac/")
+            if (ogRequest.RequestUri?.OriginalString == _pathPAC)
             {
                 ogResponse = new HttpResponseMessage(HttpStatusCode.OK)
                 {
@@ -266,7 +255,7 @@ public static class Eavesdropper
                 if (requestArgs.Cancel || cancellationToken.IsCancellationRequested) return;
 
                 ogResponse = requestArgs.Response ??
-                    await _httpClient.SendAsync(requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    await Client.SendAsync(requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
                 // This flag is meant to de-clutter the interception pipeline, in the case that a request has already been provided a response we're aware of.
                 // Also, check if the async event itself has any subscribers.
