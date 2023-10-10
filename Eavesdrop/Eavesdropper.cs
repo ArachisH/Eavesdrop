@@ -218,6 +218,7 @@ public static class Eavesdropper
         bool wasProxiedExternally = false;
         try
         {
+            // Parse Request(s) from Client
             ogRequest = await local.ReceiveHttpRequestAsync(cancellationToken).ConfigureAwait(false);
             originalRequestContent = ogRequest.Content;
 
@@ -230,24 +231,11 @@ public static class Eavesdropper
             }
             else
             {
-                if (ogRequest.Method == HttpMethod.Connect && Proxy != null && ogRequest.RequestUri != null)
+                if (ogRequest.Method == HttpMethod.Connect)
                 {
-                    string? encodedCredentials = null;
-                    if (Proxy.Credentials != null)
-                    {
-                        NetworkCredential? credentials = Proxy.Credentials.GetCredential(ogRequest.RequestUri, "Basic");
-                        if (credentials == null)
-                        {
-                            throw new Exception("Failed to acquire credentials for the given request target.");
-                        }
-
-                        encodedCredentials = $"{credentials.UserName}:{credentials.Password}";
-                        encodedCredentials = Convert.ToBase64String(Encoding.UTF8.GetBytes(encodedCredentials));
-                        ogRequest.Headers.TryAddWithoutValidation("Proxy-Authorization", $"Basic {encodedCredentials}");
-                    }
-
-                    wasProxiedExternally = true;
-                    ogRequest.RequestUri = Proxy.GetProxy(ogRequest.RequestUri);
+                    wasProxiedExternally = TryApplyProxy(ogRequest);
+                    //var isBypassedForProxyTarget = Handler.Proxy.IsBypassed(ogRequest.RequestUri);
+                    // TODO: Check if the tunnel is being double proxied.
                 }
 
                 requestArgs = new RequestInterceptedEventArgs(ogRequest);
@@ -270,6 +258,7 @@ public static class Eavesdropper
                 }
             }
 
+            // Send Response(s) to Client
             HttpResponseMessage response = responseArgs?.Response ?? ogResponse;
             await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
             if (wasProxiedExternally)
@@ -295,6 +284,29 @@ public static class Eavesdropper
         }
     }
 
+    private static bool TryApplyProxy(HttpRequestMessage request)
+    {
+        if (request.RequestUri == null) return false;
+
+        IWebProxy? proxy = Handler.Proxy ?? WebRequest.GetSystemWebProxy();
+        if (proxy == null) return false;
+
+        Uri? proxyUri = proxy.GetProxy(request.RequestUri);
+        if (proxyUri == null) return false;
+
+        ICredentials? credentials = proxy.Credentials ?? Handler.DefaultProxyCredentials;
+        if (credentials == null) return false;
+
+        NetworkCredential? uriCredentials = credentials.GetCredential(proxyUri, "Basic");
+        if (uriCredentials == null) return false;
+
+        string? encodedCredentials = $"{uriCredentials.UserName}:{uriCredentials.Password}";
+        encodedCredentials = Convert.ToBase64String(Encoding.UTF8.GetBytes(encodedCredentials));
+        request.Headers.TryAddWithoutValidation("Proxy-Authorization", $"Basic {encodedCredentials}");
+
+        request.RequestUri = proxyUri;
+        return true;
+    }
     private static async Task ClampStreamsAsync(Stream fromStream, Stream toStream)
     {
         // Immediately return to the previous context.
