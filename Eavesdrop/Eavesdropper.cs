@@ -13,6 +13,7 @@ public static class Eavesdropper
     private static readonly HttpClient _httpClient;
     private static readonly HttpClientHandler _httpClientHandler;
 
+    private static string? _pathPAC;
     private static Socket? _listener;
 
     public delegate Task AsyncEventHandler<TEventArgs>(object? sender, TEventArgs e);
@@ -41,8 +42,17 @@ public static class Eavesdropper
         }
     }
 
+    private static HttpClient? _replacementClient;
+    private static readonly HttpClient _originalClient;
+    public static HttpClient Client => _replacementClient ?? _originalClient;
+
+    public static HttpClientHandler Handler { get; }
+
     public static Certifier? Certifier { get; set; }
     public static Certifier DefaultCertifier { get; }
+
+    public static List<string> Targets { get; }
+    public static List<string> IntranetHosts { get; }
 
     public static string? PACHeader { get; set; }
     public static int ActivePort { get; private set; }
@@ -63,15 +73,17 @@ public static class Eavesdropper
 
     static Eavesdropper()
     {
-        _stateLock = new object();
-        _httpClientHandler = new HttpClientHandler
+        Handler = new HttpClientHandler
         {
-            UseProxy = false, // The proxying of requests will be handled manually to be able to avoid any data interception.
+            //UseProxy = false, // Double proxying may happen, disable automatic proxying and modify the CONNECT requests manually.
             AllowAutoRedirect = false,
             CheckCertificateRevocationList = false,
             ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
         };
         _httpClient = new HttpClient(_httpClientHandler);
+
+        _stateLock = new object();
+        _originalClient = new HttpClient(Handler);
 
         Targets = new List<string>();
         IntranetHosts = new List<string>();
@@ -88,13 +100,15 @@ public static class Eavesdropper
             _listener?.Close();
             _listener = null;
 
-            _httpClient.CancelPendingRequests();
+            Client.CancelPendingRequests();
         }
     }
     public static void Initiate(int port)
     {
         lock (_stateLock)
         {
+            _pathPAC = $"/proxy_{port}.pac/";
+
             _listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
             _listener.Bind(new IPEndPoint(IPAddress.Any, port));
             _listener.Listen();
@@ -103,9 +117,12 @@ public static class Eavesdropper
             ActivePort = port;
 
             Task.Factory.StartNew(InterceptRequestAsync, TaskCreationOptions.LongRunning);
-            INETOptions.Save($"http://127.0.0.1:{ActivePort}/proxy_{ActivePort}.pac/");
+            INETOptions.Save($"http://127.0.0.1:{ActivePort}{_pathPAC}");
         }
     }
+
+    public static void RestoreDefaultHttpClient() => _replacementClient = null;
+    public static void OverrideHttpClient(HttpClient client) => _replacementClient = client;
 
     private static string GeneratePAC()
     {
