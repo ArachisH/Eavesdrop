@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Net;
+using System.Text;
 
 namespace Eavesdrop.CLI;
 
@@ -7,7 +8,7 @@ public class Program
     public static void Main()
     {
         /* Explicitly state whether to intercept HTTP traffic ONLY. (Default: false) */
-        Eavesdropper.IsOnlyInterceptingHTTP = false;
+        Eavesdropper.IsOnlyInterceptingHttp = false;
 
         /* Alternatively, we can replicate the 'IsOnlyInterceptingHTTP = true' flag by inserting a custom script into the top of the PAC file.
          * PAC Documentation: http://findproxyforurl.com/example-pac-file/ */
@@ -22,7 +23,7 @@ public class Program
         /* Determines whether the provided hostnames below should be blacklisted, or whitelisted. (Default: false) */
         /* FALSE:   Blacklist Mode */
         /* TRUE:    Whitelist Mode */
-        Eavesdropper.IsProxyingTargets = true;
+        //Eavesdropper.IsProxyingTargets = true;
         Eavesdropper.Targets.Add("*google.com");
 
         /* Intercept requests to private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) */
@@ -33,8 +34,14 @@ public class Program
 
         /* Setting this property to 'true' means to forward ALL requests to the provided 'Proxy' server. */
         //Eavesdropper.IsActingAsForwardingServer = true;
-        //Eavesdropper.Proxy = new System.Net.WebProxy("http://10.10.10.10:80");
-        //Eavesdropper.Proxy.Credentials = new System.Net.NetworkCredential("username", "passw0rd!");
+        //Eavesdropper.Handler.Proxy = new System.Net.WebProxy("http://10.10.10.10:80");
+        //Eavesdropper.Handler.Proxy.Credentials = CredentialCache.DefaultNetworkCredentials ?? new System.Net.NetworkCredential("username", "passw0rd!");
+
+        /* Replace the internal HttpClient. */
+        //Eavesdropper.OverrideHttpClient(new HttpClient(new HttpClientHandler { UseProxy = true, DefaultProxyCredentials = CredentialCache.DefaultNetworkCredentials }));
+
+        /* Revert back to the default internal HttpClient. */
+        //Eavesdropper.RestoreDefaultHttpClient();
 
         /* Otherwise, to be able to decrypt HTTPS traffic, we need to install a self-signed certificate to the root store. */
         Eavesdropper.Certifier?.CreateTrustedRootCertificate();
