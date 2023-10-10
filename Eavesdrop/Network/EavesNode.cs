@@ -114,6 +114,15 @@ public sealed class EavesNode : IDisposable
     }
     public async Task SendHttpResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
+        static int ApplyChunkHeader(int size, Span<byte> buffer)
+        {
+            Span<char> hex = stackalloc char[8];
+            size.TryFormat(hex, out int charsWritten, "X");
+            hex = hex.Slice(0, charsWritten);
+
+            return Encoding.ASCII.GetBytes(hex, buffer);
+        }
+
         using var responseWriter = new HttpResponseWriter(MINIMUM_HTTP_BUFFER_SIZE);
 
         Encoding.UTF8.GetBytes($"HTTP/{response.Version.ToString(2)} {(int)response.StatusCode} {response.ReasonPhrase}", responseWriter);
@@ -143,32 +152,31 @@ public sealed class EavesNode : IDisposable
         if (response.Headers.TransferEncodingChunked == true)
         {
             using Stream chunkedEncodingStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            using IMemoryOwner<byte> chunkedBufferOwner = MemoryPool<byte>.Shared.Rent(MINIMUM_HTTP_BUFFER_SIZE);
+            using IMemoryOwner<byte> chunkBufferOwner = MemoryPool<byte>.Shared.Rent((MINIMUM_HTTP_BUFFER_SIZE / 4) + 16);
 
-            var chunkHeadBuffer = new byte[6];
-            chunkHeadBuffer[4] = (byte)'\r';
-            chunkHeadBuffer[5] = (byte)'\n';
+            Memory<byte> endOfLine = chunkBufferOwner.Memory.Slice(0, 2);
+            Memory<byte> chunkBuffer = chunkBufferOwner.Memory.Slice(16, MINIMUM_HTTP_BUFFER_SIZE / 4);
+            Memory<byte> chunkHeaderBuffer = chunkBufferOwner.Memory.Slice(2, 16);
 
             int bytesRead = 0;
-            Memory<byte> chunkedBuffer = chunkedBufferOwner.Memory;
+            _eolBytes.CopyTo(endOfLine.Span);
             do
             {
-                bytesRead = await chunkedEncodingStream.ReadAsync(chunkedBuffer, cancellationToken).ConfigureAwait(false);
+                bytesRead = await chunkedEncodingStream.ReadAsync(chunkBuffer, cancellationToken).ConfigureAwait(false);
 
-                int hexWritten = Encoding.UTF8.GetBytes(bytesRead.ToString("X"), chunkHeadBuffer);
-                await _stream.WriteAsync(chunkHeadBuffer.AsMemory(0, hexWritten), cancellationToken).ConfigureAwait(false);
-                await _stream.WriteAsync(chunkHeadBuffer.AsMemory(4, 2), cancellationToken).ConfigureAwait(false);
+                int headerSize = ApplyChunkHeader(bytesRead, chunkHeaderBuffer.Span);
+                await _stream.WriteAsync(chunkHeaderBuffer.Slice(0, headerSize), cancellationToken).ConfigureAwait(false);
+                await _stream.WriteAsync(endOfLine, cancellationToken).ConfigureAwait(false);
 
                 if (bytesRead > 0)
                 {
-                    await _stream.WriteAsync(chunkedBuffer.Slice(0, bytesRead), cancellationToken).ConfigureAwait(false);
+                    await _stream.WriteAsync(chunkBuffer.Slice(0, bytesRead), cancellationToken).ConfigureAwait(false);
                 }
-                await _stream.WriteAsync(chunkHeadBuffer.AsMemory(4, 2), cancellationToken).ConfigureAwait(false);
+                await _stream.WriteAsync(endOfLine, cancellationToken).ConfigureAwait(false);
             }
             while (bytesRead > 0);
         }
         else await response.Content.CopyToAsync(_stream, cancellationToken).ConfigureAwait(false);
-
         await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
