@@ -294,7 +294,7 @@ public static class Eavesdropper
         // Immediately return to the previous context.
         await Task.Yield();
 
-        using IMemoryOwner<byte> bufferOwner = MemoryPool<byte>.Shared.Rent(1024);
+        using IMemoryOwner<byte> bufferOwner = MemoryPool<byte>.Shared.Rent(512);
         Memory<byte> buffer = bufferOwner.Memory;
 
         int bytesRead = 0;
