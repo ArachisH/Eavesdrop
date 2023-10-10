@@ -102,7 +102,7 @@ public sealed class EavesNode : IDisposable
                 firstBufferedHttpSegment.Collapse();
                 lastBufferedHttpSegment = firstBufferedHttpSegment;
             }
-            else if (unconsumedBytes > 0 && request?.Content != null)
+            else if (unconsumedBytes > 0 && request?.Content?.Headers.ContentLength != null)
             {
                 int unconsumedStart = buffer.Length - unconsumedBytes;
                 ReadOnlyMemory<byte> unconsumed = lastBufferedHttpSegment.Memory.Slice(unconsumedStart, bytesRead - unconsumedStart);
@@ -243,27 +243,15 @@ public sealed class EavesNode : IDisposable
                 request.Content ??= new UnbufferedHttpContent();
                 request.Content.Headers.TryAddWithoutValidation(name, value);
             }
-            else
-            {
-                bool isConnectionHeader = name.Equals("connection", StringComparison.OrdinalIgnoreCase) || name.Equals("proxy-connection", StringComparison.OrdinalIgnoreCase);
-                bool isRequestingKeepAlive = value.Equals("keep-alive", StringComparison.OrdinalIgnoreCase);
-                if (!isConnectionHeader || !isRequestingKeepAlive)
-                {
-                    request.Headers.TryAddWithoutValidation(name, value);
-                }
-            }
+            else request.Headers.TryAddWithoutValidation(name, value);
         }
 
         return true;
     }
     private static async Task BufferHttpRequestContentAsync(HttpRequestMessage request, ReadOnlyMemory<byte> bufferedContent, Stream stream, CancellationToken cancellationToken = default)
     {
-        if (request.Content == null)
-        {
-            throw new NullReferenceException("The content property of the request message is null.");
-        }
+        int minBufferSize = (int)(request.Content?.Headers.ContentLength ?? -1);
 
-        int minBufferSize = (int)(request.Content.Headers.ContentLength ?? MINIMUM_HTTP_BUFFER_SIZE);
         var content = new BufferedHttpContent(minBufferSize);
         foreach ((string name, var values) in request.Content.Headers.NonValidated)
         {
