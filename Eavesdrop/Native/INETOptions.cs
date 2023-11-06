@@ -28,7 +28,7 @@ public static class INETOptions
         {
             fixed (char* autoConfigUrlPtr = autoConfigUrl)
             {
-                ProxyKind kind = string.IsNullOrWhiteSpace(autoConfigUrl) ? ProxyKind.PROXY_TYPE_DIRECT : ProxyKind.PROXY_TYPE_AUTO_PROXY_URL;
+                ProxyKind kind = string.IsNullOrWhiteSpace(autoConfigUrl) ? ProxyKind.PROXY_TYPE_DIRECT : ProxyKind.PROXY_TYPE_AUTO_PROXY_URL | ProxyKind.PROXY_TYPE_PROXY;
 
                 Span<INETOption> options = stackalloc INETOption[2];
                 options[0] = new INETOption(OptionKind.INTERNET_PER_CONN_FLAGS, (int)kind);
