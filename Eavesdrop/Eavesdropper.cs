@@ -120,7 +120,7 @@ public static class Eavesdropper
     {
         lock (_stateLock)
         {
-            INETOptions.Save(null);
+            INETOptions.Save(null, null);
             IsRunning = false;
 
             _listener?.Close();
@@ -143,7 +143,7 @@ public static class Eavesdropper
             ActivePort = port;
 
             Task.Factory.StartNew(InterceptRequestAsync, TaskCreationOptions.LongRunning);
-            INETOptions.Save($"http://127.0.0.1:{ActivePort}{_pathPAC}");
+            INETOptions.Save($"http://127.0.0.1:{ActivePort}", _pathPAC);
         }
     }
 

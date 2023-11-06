@@ -40,7 +40,7 @@ public class Program
         /* Otherwise, to be able to decrypt HTTPS traffic, we need to install a self-signed certificate to the root store. */
         Eavesdropper.Certifier?.CreateTrustedRootCertificate();
 
-        Eavesdropper.Initiate(12086);
+        Eavesdropper.Initiate(12030);
         Console.WriteLine("Press any key to terminate the application at any time...");
 
         Console.ReadKey();

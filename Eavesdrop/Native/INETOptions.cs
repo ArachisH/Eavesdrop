@@ -12,12 +12,12 @@ public static class INETOptions
         _stateLock = new object();
     }
 
-    public unsafe static void Save(string? autoConfigUrl = null)
+    public unsafe static void Save(string? proxyAddress, string? autoConfigPath)
     {
-        if (autoConfigUrl != null)
+        if (proxyAddress != null)
         {
             // Allows for a new PAC file url to be requested(avoid cache) if the previous session was not terminated properly.
-            Save(null);
+            Save(null, null);
         }
 
         const int INTERNET_OPTION_REFRESH = 37;
@@ -26,13 +26,16 @@ public static class INETOptions
 
         lock (_stateLock)
         {
-            fixed (char* autoConfigUrlPtr = autoConfigUrl)
+            fixed (char* autoConfigUrlPtr = $"{proxyAddress}{autoConfigPath}")
+            fixed (char* proxyAddressPtr = $"http={proxyAddress};https={proxyAddress}")
             {
-                ProxyKind kind = string.IsNullOrWhiteSpace(autoConfigUrl) ? ProxyKind.PROXY_TYPE_DIRECT : ProxyKind.PROXY_TYPE_AUTO_PROXY_URL | ProxyKind.PROXY_TYPE_PROXY;
+                ProxyKind kind = string.IsNullOrWhiteSpace(autoConfigPath)
+                    ? ProxyKind.PROXY_TYPE_DIRECT : ProxyKind.PROXY_TYPE_AUTO_PROXY_URL | ProxyKind.PROXY_TYPE_PROXY;
 
-                Span<INETOption> options = stackalloc INETOption[2];
+                Span<INETOption> options = stackalloc INETOption[3];
                 options[0] = new INETOption(OptionKind.INTERNET_PER_CONN_FLAGS, (int)kind);
-                options[1] = new INETOption(OptionKind.INTERNET_PER_CONN_AUTOCONFIG_URL, autoConfigUrlPtr);
+                options[1] = new INETOption(OptionKind.INTERNET_PER_CONN_PROXY_SERVER, proxyAddressPtr);
+                options[2] = new INETOption(OptionKind.INTERNET_PER_CONN_AUTOCONFIG_URL, autoConfigUrlPtr);
 
                 fixed (INETOption* optionsPtr = options)
                 {
