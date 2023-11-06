@@ -278,20 +278,16 @@ public static class Eavesdropper
                         // If it fails to apply the proxy manually, discard this request.
                         if (!(wasProxiedExternally = TryApplyProxy(ogRequest))) return;
                     }
-
-                    ogResponse = await _client.SendAsync(
-                        requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    ogResponse = await _client.SendAsync(requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                 }
+                originalResponseContent = ogResponse.Content;
 
                 // This flag is meant to de-clutter the interception pipeline, in the case that a request has already been provided a response we're aware of.
                 // Also, check if the async event itself has any subscribers.
-                if (requestArgs.IsInterceptingResponse && ResponseInterceptedAsync != null)
+                if ((!IsActingAsForwardingServer || requestArgs.Method != HttpMethod.Connect) && requestArgs.IsInterceptingResponse && ResponseInterceptedAsync != null)
                 {
-                    originalResponseContent = ogResponse.Content; // Store it so we can dispose of it if the user decides to replace the content.
-
                     responseArgs = new ResponseInterceptedEventArgs(ogResponse);
                     await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
-
                     if (responseArgs.Cancel || cancellationToken.IsCancellationRequested) return;
                 }
             }
