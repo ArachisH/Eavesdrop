@@ -319,6 +319,8 @@ public static class Eavesdropper
         while (fromStream.CanRead && toStream.CanWrite)
         {
             bytesRead = await fromStream.ReadAsync(buffer).ConfigureAwait(false);
+            if (bytesRead < 1) break;
+
             await toStream.WriteAsync(buffer.Slice(0, bytesRead)).ConfigureAwait(false);
             await toStream.FlushAsync().ConfigureAwait(false);
         }
