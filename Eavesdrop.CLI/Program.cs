@@ -33,9 +33,9 @@ public class Program
         //Eavesdropper.IntranetHosts.Add("*myLocalHost.domain");
 
         /* Setting this property to 'true' means to forward ALL requests to the provided 'Proxy' server. */
+        //Eavesdropper.Proxy = new System.Net.WebProxy("http://10.10.10.10:80");
+        //Eavesdropper.Proxy.Credentials = CredentialCache.DefaultNetworkCredentials ?? new System.Net.NetworkCredential("username", "passw0rd!");
         //Eavesdropper.IsActingAsForwardingServer = true;
-        //Eavesdropper.Handler.Proxy = new System.Net.WebProxy("http://10.10.10.10:80");
-        //Eavesdropper.Handler.Proxy.Credentials = CredentialCache.DefaultNetworkCredentials ?? new System.Net.NetworkCredential("username", "passw0rd!");
 
         /* Replace the internal HttpClient. */
         //Eavesdropper.OverrideHttpClient(new HttpClient(new HttpClientHandler { UseProxy = true, DefaultProxyCredentials = CredentialCache.DefaultNetworkCredentials }));
