@@ -10,6 +10,9 @@ namespace Eavesdrop;
 public static class Eavesdropper
 {
     private static readonly object _stateLock;
+    private static readonly HttpClient _client;
+    private static readonly HttpClientHandler _handler;
+    private static readonly SelfBypassWebProxy _selfBypassProxy;
 
     private static string? _pathPAC;
     private static Socket? _listener;
@@ -40,11 +43,32 @@ public static class Eavesdropper
         }
     }
 
-    private static HttpClient? _replacementClient;
-    private static readonly HttpClient _originalClient;
-    public static HttpClient Client => _replacementClient ?? _originalClient;
+    private static IWebProxy? _proxy;
+    public static IWebProxy? Proxy
+    {
+        get => _proxy;
+        set
+        {
+            _proxy = value;
 
-    public static HttpClientHandler Handler { get; }
+            // Only proxy if we're not using the default system proxy, since that would cause recursive requests to this server.
+            if (value != null)
+            {
+                _selfBypassProxy.Proxy = value;
+
+                _handler.Proxy = _selfBypassProxy;
+                _handler.UseProxy = true;
+            }
+            else // There may(big MAY) be a race condition here, so disable the proxy gracefully to reduce possibility of recursive interception.
+            {
+                // Proxy destination is required for this mode to be active.
+                _isActingAsForwardingServer = false;
+
+                _handler.UseProxy = false;
+                _handler.Proxy = null;
+            }
+        }
+    }
 
     public static Certifier? Certifier { get; set; }
     public static Certifier DefaultCertifier { get; }
@@ -59,20 +83,33 @@ public static class Eavesdropper
     public static bool IsProxyingTargets { get; set; }
     public static bool IsOnlyInterceptingHttp { get; set; }
     public static bool IsProxyingPrivateNetworks { get; set; }
-    public static bool IsActingAsForwardingServer { get; set; }
+
+    private static bool _isActingAsForwardingServer;
+    public static bool IsActingAsForwardingServer
+    {
+        get => _isActingAsForwardingServer;
+        set
+        {
+            if (value && Proxy == null)
+            {
+                throw new Exception($"Unable to act as a forwarding server without a destination. {nameof(Proxy)} = null");
+            }
+            _isActingAsForwardingServer = value;
+        }
+    }
 
     static Eavesdropper()
     {
-        Handler = new HttpClientHandler
+        _stateLock = new object();
+        _selfBypassProxy = new SelfBypassWebProxy();
+
+        _client = new HttpClient(_handler = new HttpClientHandler
         {
-            //UseProxy = false, // Double proxying may happen, disable automatic proxying and modify the CONNECT requests manually.
+            UseProxy = false,
             AllowAutoRedirect = false,
             CheckCertificateRevocationList = false,
             ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-        };
-
-        _stateLock = new object();
-        _originalClient = new HttpClient(Handler);
+        });
 
         Targets = new List<string>();
         IntranetHosts = new List<string>();
@@ -89,7 +126,7 @@ public static class Eavesdropper
             _listener?.Close();
             _listener = null;
 
-            Client.CancelPendingRequests();
+            _client.CancelPendingRequests();
         }
     }
     public static void Initiate(int port)
@@ -109,9 +146,6 @@ public static class Eavesdropper
             INETOptions.Save($"http://127.0.0.1:{ActivePort}{_pathPAC}");
         }
     }
-
-    public static void RestoreDefaultHttpClient() => _replacementClient = null;
-    public static void OverrideHttpClient(HttpClient client) => _replacementClient = client;
 
     private static string GeneratePAC()
     {
@@ -231,19 +265,23 @@ public static class Eavesdropper
             }
             else
             {
-                if (ogRequest.Method == HttpMethod.Connect)
-                {
-                    wasProxiedExternally = TryApplyProxy(ogRequest);
-                    //var isBypassedForProxyTarget = Handler.Proxy.IsBypassed(ogRequest.RequestUri);
-                    // TODO: Check if the tunnel is being double proxied.
-                }
-
                 requestArgs = new RequestInterceptedEventArgs(ogRequest);
                 await OnRequestInterceptedAsync(requestArgs, cancellationToken).ConfigureAwait(false);
                 if (requestArgs.Cancel || cancellationToken.IsCancellationRequested) return;
 
-                ogResponse = requestArgs.Response ??
-                    await Client.SendAsync(requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                ogResponse = requestArgs.Response;
+                if (ogResponse == null)
+                {
+                    if (IsActingAsForwardingServer && ogRequest.Method == HttpMethod.Connect)
+                    {
+                        // Double proxying should be avoided as the handler should be using the 'SelfBypassWebProxy' instance.
+                        // If it fails to apply the proxy manually, discard this request.
+                        if (!(wasProxiedExternally = TryApplyProxy(ogRequest))) return;
+                    }
+
+                    ogResponse = await _client.SendAsync(
+                        requestArgs.Request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                }
 
                 // This flag is meant to de-clutter the interception pipeline, in the case that a request has already been provided a response we're aware of.
                 // Also, check if the async event itself has any subscribers.
@@ -286,15 +324,12 @@ public static class Eavesdropper
 
     private static bool TryApplyProxy(HttpRequestMessage request)
     {
-        if (request.RequestUri == null) return false;
+        if (request.RequestUri == null || Proxy == null) return false;
 
-        IWebProxy? proxy = Handler.Proxy ?? WebRequest.GetSystemWebProxy();
-        if (proxy == null) return false;
-
-        Uri? proxyUri = proxy.GetProxy(request.RequestUri);
+        Uri? proxyUri = Proxy.GetProxy(request.RequestUri);
         if (proxyUri == null) return false;
 
-        ICredentials? credentials = proxy.Credentials ?? Handler.DefaultProxyCredentials;
+        ICredentials? credentials = Proxy.Credentials;
         if (credentials == null) return false;
 
         NetworkCredential? uriCredentials = credentials.GetCredential(proxyUri, "Basic");
