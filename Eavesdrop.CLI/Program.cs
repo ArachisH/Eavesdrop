@@ -37,12 +37,6 @@ public class Program
         //Eavesdropper.Proxy.Credentials = CredentialCache.DefaultNetworkCredentials ?? new System.Net.NetworkCredential("username", "passw0rd!");
         //Eavesdropper.IsActingAsForwardingServer = true;
 
-        /* Replace the internal HttpClient. */
-        //Eavesdropper.OverrideHttpClient(new HttpClient(new HttpClientHandler { UseProxy = true, DefaultProxyCredentials = CredentialCache.DefaultNetworkCredentials }));
-
-        /* Revert back to the default internal HttpClient. */
-        //Eavesdropper.RestoreDefaultHttpClient();
-
         /* Otherwise, to be able to decrypt HTTPS traffic, we need to install a self-signed certificate to the root store. */
         Eavesdropper.Certifier?.CreateTrustedRootCertificate();
 

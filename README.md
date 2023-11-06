@@ -80,6 +80,18 @@ Since both of these delegates accept a Task as a return type, we can simply retu
 Eavesdropper.ResponseInterceptedAsync += (object sender, ResponseInterceptedEventArgs e) => Task.Delay(1000);
 ```
 
+### External Proxying
+An instance of `IWebProxy` can be pass to the `Eavesdropper.Proxy` property that will proxy all intercepted outgoing web requests to the specified proxy server.
+```cs
+Eavesdropper.Proxy = new WebProxy("http://10.10.10.10:80");
+Eavesdropper.Proxy.Credentials = CredentialCache.DefaultNetworkCredentials ?? new NetworkCredential("username", "passw0rd!");
+```
+Additionally, we can set the proxy server into forwarding mode. This mode will **not** attempt to decrypt any intercepted HTTPS traffic, and only mediate the data from the local machine to the specified proxy server.
+```cs
+Eavesdropper.IsActingAsForwardingServer = true;
+```
+This propery should only be enabled once a `IWebProxy` instance has been provided.
+
 ---
 ## Initialization
 To start the proxy server and begin intercepting the system's HTTP/S traffic we need to call:
@@ -89,7 +101,7 @@ Eavesdropper.Initiate(port);
 Doing so will set the URL of the 'setup script' on the machine, where the URL points to the proxy server itself.
 (http://127.0.0.1:{ActivePort}/proxy_{ActivePort}.pac/)
 
-The PAC file is created based on the configuration you applied beforehand, and given as a response when the request is intercepted from the machine. This PAC file is not stored locally, and is provided by the proxy server instead because the response must contain 'application/x-ns-proxy-autoconfig' as its' Content-Type header value.
+The PAC file is created based on the configuration you applied beforehand, and given as a response when the request is intercepted from the machine. This PAC file is not stored locally, and is provided by the proxy server instead because the response must contain `application/x-ns-proxy-autoconfig` as its' `Content-Type` header value.
 
 ---
 ## Termination
