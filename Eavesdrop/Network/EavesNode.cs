@@ -7,6 +7,10 @@ using System.Security.Cryptography.X509Certificates;
 
 using Eavesdrop.Network.Http;
 
+#if NETSTANDARD2_0
+using static Eavesdrop.IO.StreamMemoryExtensions;
+#endif
+
 namespace Eavesdrop.Network;
 
 public sealed class EavesNode : IDisposable

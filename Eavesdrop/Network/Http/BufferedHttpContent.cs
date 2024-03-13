@@ -1,6 +1,10 @@
 ﻿using System.Net;
 using System.Buffers;
 
+#if NETSTANDARD2_0
+using static Eavesdrop.IO.StreamMemoryExtensions;
+#endif
+
 namespace Eavesdrop.Network.Http;
 
 public sealed class BufferedHttpContent : HttpContent

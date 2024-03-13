@@ -6,6 +6,10 @@ using System.Net.Sockets;
 using Eavesdrop.Network;
 using Eavesdrop.Network.Http;
 
+#if NETSTANDARD2_0
+using static Eavesdrop.IO.StreamMemoryExtensions;
+#endif
+
 namespace Eavesdrop;
 
 public static class Eavesdropper
