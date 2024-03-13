@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace Eavesdrop;
 
-internal static class StreamMemoryExtensions
+internal static class CompatibleStreamExtensions
 {
     public static Task<int> ReadAsync(this Stream stream, Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
