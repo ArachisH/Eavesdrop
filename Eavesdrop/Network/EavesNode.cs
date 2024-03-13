@@ -87,12 +87,15 @@ public sealed class EavesNode : IDisposable
                 }
 
                 var sslStream = new SslStream(_stream);
+#if !NETSTANDARD2_0
                 var sslOptions = new SslServerAuthenticationOptions()
                 {
                     ServerCertificate = certificate
                 };
-
                 await sslStream.AuthenticateAsServerAsync(sslOptions, cancellationToken).ConfigureAwait(false);
+#else
+                await sslStream.AuthenticateAsServerAsync(certificate).ConfigureAwait(false);
+#endif
                 _stream = sslStream;
 
                 baseUri = request.RequestUri;
@@ -147,11 +150,15 @@ public sealed class EavesNode : IDisposable
 
         responseWriter.AppendLine();
         await responseWriter.WriteToAsync(_stream, cancellationToken).ConfigureAwait(false);
-        if (response.Content == null || response.Content == _okResponse.Content || response.RequestMessage?.Method == HttpMethod.Connect) return;
+        if (response.Content == null || response.Content == _okResponse.Content || response.RequestMessage?.Method == AdditionalHttpMethods.Connect) return;
 
         if (response.Headers.TransferEncodingChunked == true)
         {
+#if !NETSTANDARD2_0
             using Stream chunkedEncodingStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+#else
+            using Stream chunkedEncodingStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+#endif
             using IMemoryOwner<byte> chunkBufferOwner = MemoryPool<byte>.Shared.Rent((MINIMUM_HTTP_BUFFER_SIZE / 4) + 16);
 
             Memory<byte> endOfLine = chunkBufferOwner.Memory.Slice(0, 2);
@@ -176,7 +183,14 @@ public sealed class EavesNode : IDisposable
             }
             while (bytesRead > 0);
         }
-        else await response.Content.CopyToAsync(_stream, cancellationToken).ConfigureAwait(false);
+        else
+        {
+#if !NETSTANDARD2_0
+            await response.Content.CopyToAsync(_stream, cancellationToken).ConfigureAwait(false);
+#else
+            await response.Content.CopyToAsync(_stream).ConfigureAwait(false);
+#endif
+        }
         await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 

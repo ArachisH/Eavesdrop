@@ -32,8 +32,9 @@ public sealed class ResponseInterceptedEventArgs : CancelEventArgs
     }
 
     public HttpResponseHeaders Headers => Response.Headers;
+#if !NETSTANDARD2_0
     public HttpResponseHeaders TrailingHeaders => Response.TrailingHeaders;
-
+#endif
     public HttpResponseMessage Response { get; set; }
 
     public ResponseInterceptedEventArgs(HttpResponseMessage response)

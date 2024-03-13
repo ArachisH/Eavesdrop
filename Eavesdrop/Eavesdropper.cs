@@ -23,11 +23,14 @@ public static class Eavesdropper
     private static async Task OnRequestInterceptedAsync(RequestInterceptedEventArgs e, CancellationToken cancellationToken)
     {
         e.Cancel = cancellationToken.IsCancellationRequested;
-
         Task? interceptedTask = RequestInterceptedAsync?.Invoke(null, e);
         if (interceptedTask != null)
         {
+#if NETSTANDARD2_0
+            await interceptedTask;
+#else
             await interceptedTask.WaitAsync(cancellationToken);
+#endif
         }
     }
 
@@ -39,7 +42,11 @@ public static class Eavesdropper
         Task? interceptedTask = ResponseInterceptedAsync?.Invoke(null, e);
         if (interceptedTask != null)
         {
+#if NETSTANDARD2_0
+            await interceptedTask;
+#else
             await interceptedTask.WaitAsync(cancellationToken);
+#endif
         }
     }
 
@@ -108,7 +115,7 @@ public static class Eavesdropper
             UseProxy = false,
             AllowAutoRedirect = false,
             CheckCertificateRevocationList = false,
-            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            ServerCertificateCustomValidationCallback = static (_, _, _, _) => true
         });
 
         Targets = new List<string>();
@@ -137,7 +144,7 @@ public static class Eavesdropper
 
             _listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
             _listener.Bind(new IPEndPoint(IPAddress.Any, port));
-            _listener.Listen();
+            _listener.Listen(int.MaxValue);
 
             IsRunning = true;
             ActivePort = port;
@@ -297,8 +304,11 @@ public static class Eavesdropper
             await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
             if (wasProxiedExternally)
             {
+#if NETSTANDARD2_0
+                using Stream remoteStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+#else
                 using Stream remoteStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-
+#endif
                 Task remoteToLocalClampTask = ClampStreamsAsync(remoteStream, local.Stream);
                 Task localToRemoteClampTask = ClampStreamsAsync(local.Stream, remoteStream);
 

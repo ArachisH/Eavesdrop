@@ -1,5 +1,10 @@
 ﻿using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
+
+#if NETSTANDARD2_0
+using System.Collections.ObjectModel;
+#endif
 
 namespace Eavesdrop;
 
@@ -65,6 +70,52 @@ public sealed class Certifier : ICertifier, IDisposable
     {
         return InstallCertificate(_myStore, certificateName);
     }
+
+#if NETSTANDARD2_0
+    private X509Certificate2 CreateCertificate(string subjectName, string alternateName)
+    {
+        var rsa = Authority == null
+                ? new RSACryptoServiceProvider(KeyLength)
+                : new RSACryptoServiceProvider(KeyLength, new CspParameters(1, "Microsoft Base Cryptographic Provider v1.0", Guid.NewGuid().ToString()));
+
+        Type certificateRequestType = typeof(RSACertificateExtensions).Assembly.GetType("System.Security.Cryptography.X509Certificates.CertificateRequest");
+        object request = certificateRequestType.GetConstructor([typeof(string), typeof(RSA), typeof(HashAlgorithmName), typeof(RSASignaturePadding)])
+            .Invoke([subjectName, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1]);
+
+        var publicKey = (PublicKey)certificateRequestType.GetProperty("PublicKey").GetValue(request);
+        var extensions = (Collection<X509Extension>)certificateRequestType.GetProperty("CertificateExtensions").GetValue(request);
+        extensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        extensions.Add(new X509SubjectKeyIdentifierExtension(publicKey, false));
+
+        if (Authority == null)
+        {
+            using var certificate = (X509Certificate2)certificateRequestType.GetMethod("CreateSelfSigned")
+                .Invoke(request, [(DateTimeOffset)NotBefore, (DateTimeOffset)NotAfter]);
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                certificate.FriendlyName = alternateName;
+            }
+            return new X509Certificate2(certificate.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+        }
+        else
+        {
+            Type subjectAlternateNameBuilderType = typeof(RSACertificateExtensions).Assembly.GetType("System.Security.Cryptography.X509Certificates.SubjectAlternativeNameBuilder");
+            object sanBuilder = subjectAlternateNameBuilderType.GetConstructor([]).Invoke(null);
+            subjectAlternateNameBuilderType.GetMethod("AddDnsName").Invoke(sanBuilder, [alternateName]);
+
+            extensions.Add((X509Extension)subjectAlternateNameBuilderType.GetMethod("Build").Invoke(sanBuilder, [false]));
+
+            using var certificate = (X509Certificate2)certificateRequestType.GetMethod("Create", [typeof(X509Certificate2), typeof(DateTimeOffset), typeof(DateTimeOffset), typeof(byte[])])
+                .Invoke(request, [Authority, (DateTimeOffset)Authority.NotBefore, (DateTimeOffset)Authority.NotAfter, Guid.NewGuid().ToByteArray()]);
+
+            // TODO: Copy with private key
+            //certificate.PrivateKey = rsa;
+
+            return new X509Certificate2(certificate.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+        }
+    }
+#else
     public X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
         using var rsa = RSA.Create(KeyLength);
@@ -76,7 +127,7 @@ public sealed class Certifier : ICertifier, IDisposable
 
             using X509Certificate2 certificate = certificateRequest.CreateSelfSigned(NotBefore.ToUniversalTime(), NotAfter.ToUniversalTime());
 
-            if (OperatingSystem.IsWindows())
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 certificate.FriendlyName = alternateName;
             }
@@ -94,13 +145,15 @@ public sealed class Certifier : ICertifier, IDisposable
             using X509Certificate2 certificate = certificateRequest.Create(Authority, Authority.NotBefore, Authority.NotAfter, Guid.NewGuid().ToByteArray());
             using X509Certificate2 certificateWithPrivateKey = certificate.CopyWithPrivateKey(rsa);
 
-            if (OperatingSystem.IsWindows())
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 certificateWithPrivateKey.FriendlyName = alternateName;
             }
             return new X509Certificate2(certificateWithPrivateKey.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
         }
     }
+#endif
+
     private X509Certificate2? InstallCertificate(X509Store store, string certificateName)
     {
         if (_certificateCache.TryGetValue(certificateName, out X509Certificate2? certificate))
