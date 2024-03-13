@@ -1,9 +1,9 @@
 ﻿#if NETSTANDARD2_0
 using System.Runtime.InteropServices;
 
-namespace Eavesdrop.IO;
+namespace Eavesdrop;
 
-public static class StreamMemoryExtensions
+internal static class StreamMemoryExtensions
 {
     public static Task<int> ReadAsync(this Stream stream, Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
