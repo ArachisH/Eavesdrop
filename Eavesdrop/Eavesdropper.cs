@@ -129,7 +129,7 @@ public static class Eavesdropper
             _client.CancelPendingRequests();
         }
     }
-    public static void Initiate(int port)
+    public static void Initiate(int port, bool isApplyingProxyExplicitly = false)
     {
         lock (_stateLock)
         {
@@ -143,7 +143,7 @@ public static class Eavesdropper
             ActivePort = port;
 
             Task.Factory.StartNew(InterceptRequestAsync, TaskCreationOptions.LongRunning);
-            INETOptions.Save($"http://127.0.0.1:{ActivePort}", _pathPAC);
+            INETOptions.Save($"http://127.0.0.1:{ActivePort}", _pathPAC, isApplyingProxyExplicitly);
         }
     }
 

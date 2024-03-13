@@ -12,12 +12,12 @@ public static class INETOptions
         _stateLock = new object();
     }
 
-    public unsafe static void Save(string? proxyAddress, string? autoConfigPath)
+    public unsafe static void Save(string? proxyAddress, string? autoConfigPath, bool isApplyingProxyExplicitly = false)
     {
         if (proxyAddress != null)
         {
             // Allows for a new PAC file url to be requested(avoid cache) if the previous session was not terminated properly.
-            Save(null, null);
+            Save(null, null, false);
         }
 
         const int INTERNET_OPTION_REFRESH = 37;
@@ -29,8 +29,11 @@ public static class INETOptions
             fixed (char* autoConfigUrlPtr = $"{proxyAddress}{autoConfigPath}")
             fixed (char* proxyAddressPtr = $"http={proxyAddress};https={proxyAddress}")
             {
+                // Applying the proxy server address explicitly will usually allow for a wider range of applications to become aware of the system proxy.
+                // Otherwise, using a configuration script allows for more control when utilizing a white-list.
                 ProxyKind kind = string.IsNullOrWhiteSpace(autoConfigPath)
-                    ? ProxyKind.PROXY_TYPE_DIRECT : ProxyKind.PROXY_TYPE_AUTO_PROXY_URL | ProxyKind.PROXY_TYPE_PROXY;
+                    ? ProxyKind.PROXY_TYPE_AUTO_DETECT | ProxyKind.PROXY_TYPE_DIRECT
+                    : ProxyKind.PROXY_TYPE_AUTO_DETECT | ProxyKind.PROXY_TYPE_AUTO_PROXY_URL | (isApplyingProxyExplicitly ? ProxyKind.PROXY_TYPE_PROXY : 0);
 
                 Span<INETOption> options = stackalloc INETOption[3];
                 options[0] = new INETOption(OptionKind.INTERNET_PER_CONN_FLAGS, (int)kind);
