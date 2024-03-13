@@ -36,11 +36,13 @@ public sealed class EavesNode : IDisposable
             ["GET"] = HttpMethod.Get,
             ["HEAD"] = HttpMethod.Head,
             ["OPTIONS"] = HttpMethod.Options,
-            ["PATCH"] = HttpMethod.Patch,
             ["POST"] = HttpMethod.Post,
             ["PUT"] = HttpMethod.Put,
             ["TRACE"] = HttpMethod.Trace,
-            ["CONNECT"] = HttpMethod.Connect
+
+            // Compatibility for .NET Standard 2.0
+            ["PATCH"] = AdditionalHttpMethods.Patch,
+            ["CONNECT"] = AdditionalHttpMethods.Connect
         };
     }
     public EavesNode(Socket socket, ICertifier? certifier, bool isHandlingConnectRequests = true)
@@ -69,7 +71,7 @@ public sealed class EavesNode : IDisposable
                 continue;
             }
 
-            if (request?.Method == HttpMethod.Connect && request.RequestUri != null)
+            if (request?.Method == AdditionalHttpMethods.Connect && request.RequestUri != null)
             {
                 // Return the raw CONNECT request so that it may instead be forwarded to another proxy server.
                 if (IsHandlingConnectRequests) return request;
@@ -232,7 +234,7 @@ public sealed class EavesNode : IDisposable
 
         request = new HttpRequestMessage(_httpMethodTable[method], string.Empty);
 
-        request.RequestUri = request.Method == HttpMethod.Connect
+        request.RequestUri = request.Method == AdditionalHttpMethods.Connect
             ? new Uri("https://" + uri)
             : new Uri((baseUri?.GetLeftPart(UriPartial.Authority) ?? string.Empty) + uri, UriKind.RelativeOrAbsolute);
 

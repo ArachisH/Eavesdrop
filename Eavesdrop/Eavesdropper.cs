@@ -4,6 +4,7 @@ using System.Buffers;
 using System.Net.Sockets;
 
 using Eavesdrop.Network;
+using Eavesdrop.Network.Http;
 
 namespace Eavesdrop;
 
@@ -279,7 +280,7 @@ public static class Eavesdropper
                 ogResponse = requestArgs.Response;
                 if (ogResponse == null)
                 {
-                    if (IsActingAsForwardingServer && ogRequest.Method == HttpMethod.Connect)
+                    if (IsActingAsForwardingServer && ogRequest.Method == AdditionalHttpMethods.Connect)
                     {
                         // Double proxying should be avoided as the handler should be using the 'SelfBypassWebProxy' instance.
                         // If it fails to apply the proxy manually, discard this request.
@@ -291,7 +292,7 @@ public static class Eavesdropper
 
                 // This flag is meant to de-clutter the interception pipeline, in the case that a request has already been provided a response we're aware of.
                 // Also, check if the async event itself has any subscribers.
-                if ((!IsActingAsForwardingServer || requestArgs.Method != HttpMethod.Connect) && requestArgs.IsInterceptingResponse && ResponseInterceptedAsync != null)
+                if ((!IsActingAsForwardingServer || requestArgs.Method != AdditionalHttpMethods.Connect) && requestArgs.IsInterceptingResponse && ResponseInterceptedAsync != null)
                 {
                     responseArgs = new ResponseInterceptedEventArgs(ogResponse);
                     await OnResponseInterceptedAsync(responseArgs, cancellationToken).ConfigureAwait(false);
