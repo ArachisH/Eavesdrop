@@ -6,14 +6,6 @@ namespace Eavesdrop;
 
 internal static class CompatibleEncodingExtensions
 {
-    public static unsafe int GetBytes(this Encoding encoding, ReadOnlySpan<char> chars, Span<byte> buffer)
-    {
-        fixed (char* charsPtr = chars)
-        fixed (byte* bufferPtr = buffer)
-        {
-            return encoding.GetBytes(charsPtr, chars.Length, bufferPtr, buffer.Length);
-        }
-    }
     public static unsafe int GetBytes(this Encoding encoding, string value, IBufferWriter<byte> writer)
     {
         int byteCount = encoding.GetByteCount(value);
@@ -25,6 +17,14 @@ internal static class CompatibleEncodingExtensions
             int written = encoding.GetBytes(valuePtr, value.Length, bufferPtr, buffer.Length);
             writer.Advance(written);
             return written;
+        }
+    }
+    public static unsafe int GetBytes(this Encoding encoding, ReadOnlySpan<char> chars, Span<byte> buffer)
+    {
+        fixed (char* charsPtr = chars)
+        fixed (byte* bufferPtr = buffer)
+        {
+            return encoding.GetBytes(charsPtr, chars.Length, bufferPtr, buffer.Length);
         }
     }
 }
