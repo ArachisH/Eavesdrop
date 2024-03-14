@@ -1,11 +1,16 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net7.0</TargetFramework>
+		<TargetFrameworks>net461;net7</TargetFrameworks>
+		<LangVersion>latest</LangVersion>
 		<OutputType>Exe</OutputType>
 		<IsPackable>false</IsPackable>
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="System.Net.Http" Version="4.3.0" Condition="'$(TargetFramework)' == 'NET461'" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\Eavesdrop\Eavesdrop.csproj" />
