@@ -27,5 +27,13 @@ internal static class CompatibleEncodingExtensions
             return encoding.GetBytes(charsPtr, chars.Length, bufferPtr, buffer.Length);
         }
     }
+
+    public static unsafe string GetString(this Encoding encoding, ReadOnlySpan<byte> bytes)
+    {
+        fixed (byte* bytesPtr = bytes)
+        {
+            return encoding.GetString(bytesPtr, bytes.Length);
+        }
+    }
 }
 #endif
