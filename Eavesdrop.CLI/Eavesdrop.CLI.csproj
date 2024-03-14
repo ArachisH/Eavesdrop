@@ -9,7 +9,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="System.Net.Http" Version="4.3.0" Condition="'$(TargetFramework)' == 'NET461'" />
+		<PackageReference Include="System.Net.Http" Version="4.3.4" Condition="'$(TargetFramework)' == 'net461'" />
 	</ItemGroup>
 
 	<ItemGroup>
