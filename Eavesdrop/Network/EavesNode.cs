@@ -209,7 +209,12 @@ public sealed class EavesNode : IDisposable
         else // This will allocate a buffer to place the merged span on. 
         {
             // TODO: Manually enumerate the memory segments to construct the HTTP request.
-            var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(first, 0, last, last.Memory.Length));
+            var sequence = new ReadOnlySequence<byte>(first, 0, last, last.Memory.Length);
+#if NETSTANDARD2_0
+            var reader = new SequenceReader<byte>(sequence, first, 0, last, last.Memory.Length);
+#else
+            var reader = new SequenceReader<byte>(sequence);
+#endif
 
             // No segments contain the EOF bytes, continue to read more data.
             if (!reader.TryReadTo(out httpHeadersSpan, _eofBytes, true)) return false;
