@@ -121,10 +121,13 @@ public sealed class EavesNode : IDisposable
     {
         static int ApplyChunkHeader(int size, Span<byte> buffer)
         {
+#if NETSTANDARD2_0
+            ReadOnlySpan<char> hex = size.ToString("X").AsSpan();
+#else
             Span<char> hex = stackalloc char[8];
             size.TryFormat(hex, out int charsWritten, "X");
             hex = hex.Slice(0, charsWritten);
-
+#endif
             return Encoding.ASCII.GetBytes(hex, buffer);
         }
 
