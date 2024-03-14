@@ -39,6 +39,14 @@ public sealed class HttpResponseWriter : IBufferWriter<byte>, IDisposable
     public void Advance(int count) => Written += count;
     public Memory<byte> GetMemory(int sizeHint = 0) => throw new NotImplementedException();
 
+    public void AppendLine()
+    {
+        Span<byte> eofBytes = GetSpan(2);
+        eofBytes[0] = (byte)'\r';
+        eofBytes[1] = (byte)'\n';
+        Advance(2);
+    }
+
     public void Dispose()
     {
         if (!_disposed)
@@ -46,13 +54,5 @@ public sealed class HttpResponseWriter : IBufferWriter<byte>, IDisposable
             _bufferOwner.Dispose();
             _disposed = true;
         }
-    }
-
-    public void AppendLine()
-    {
-        Span<byte> eofBytes = GetSpan(2);
-        eofBytes[0] = (byte)'\r';
-        eofBytes[1] = (byte)'\n';
-        Advance(2);
     }
 }
