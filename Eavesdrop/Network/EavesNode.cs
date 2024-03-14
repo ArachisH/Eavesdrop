@@ -132,26 +132,14 @@ public sealed class EavesNode : IDisposable
         }
 
         using var responseWriter = new HttpResponseWriter(MINIMUM_HTTP_BUFFER_SIZE);
-
         Encoding.UTF8.GetBytes($"HTTP/{response.Version.ToString(2)} {(int)response.StatusCode} {response.ReasonPhrase}", responseWriter);
         responseWriter.AppendLine();
 
         if (response.Content != null && response.Content != _okResponse.Content)
         {
-            foreach ((string name, var values) in response.Content.Headers.NonValidated)
-            {
-                Encoding.UTF8.GetBytes($"{name}: ", responseWriter);
-                Encoding.UTF8.GetBytes(string.Join("; ", values), responseWriter);
-                responseWriter.AppendLine();
-            }
+            responseWriter.Write(response.Content.Headers);
         }
-
-        foreach ((string name, var values) in response.Headers.NonValidated)
-        {
-            Encoding.UTF8.GetBytes($"{name}: ", responseWriter);
-            Encoding.UTF8.GetBytes(string.Join("; ", values), responseWriter);
-            responseWriter.AppendLine();
-        }
+        responseWriter.Write(response.Headers);
 
         responseWriter.AppendLine();
         await responseWriter.WriteToAsync(_stream, cancellationToken).ConfigureAwait(false);

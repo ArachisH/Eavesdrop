@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Net.Http.Headers;
 
 namespace Eavesdrop.Network.Http;
 
@@ -45,6 +46,10 @@ public sealed class HttpResponseWriter : IBufferWriter<byte>, IDisposable
         eofBytes[0] = (byte)'\r';
         eofBytes[1] = (byte)'\n';
         Advance(2);
+    }
+    public void Write(HttpHeaders headers)
+    {
+        // TODO
     }
 
     public void Dispose()
