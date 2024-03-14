@@ -115,7 +115,9 @@ public static class Eavesdropper
         {
             UseProxy = false,
             AllowAutoRedirect = false,
+#if !NETSTANDARD
             CheckCertificateRevocationList = false,
+#endif
             ServerCertificateCustomValidationCallback = static (_, _, _, _) => true
         });
 
