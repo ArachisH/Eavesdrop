@@ -35,7 +35,12 @@ public static class INETOptions
                     ? ProxyKind.PROXY_TYPE_AUTO_DETECT | ProxyKind.PROXY_TYPE_DIRECT
                     : ProxyKind.PROXY_TYPE_AUTO_DETECT | ProxyKind.PROXY_TYPE_AUTO_PROXY_URL | (isApplyingProxyExplicitly ? ProxyKind.PROXY_TYPE_PROXY : 0);
 
+#if NETSTANDARD2_0
+                Span<INETOption> options = new INETOption[3];
+#else
+                // Huge performance boost, trust me.
                 Span<INETOption> options = stackalloc INETOption[3];
+#endif
                 options[0] = new INETOption(OptionKind.INTERNET_PER_CONN_FLAGS, (int)kind);
                 options[1] = new INETOption(OptionKind.INTERNET_PER_CONN_PROXY_SERVER, proxyAddressPtr);
                 options[2] = new INETOption(OptionKind.INTERNET_PER_CONN_AUTOCONFIG_URL, autoConfigUrlPtr);
