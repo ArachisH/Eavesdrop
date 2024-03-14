@@ -14,7 +14,7 @@ internal static class CompatibleEncodingExtensions
             return encoding.GetBytes(charsPtr, chars.Length, bufferPtr, buffer.Length);
         }
     }
-    public static unsafe long GetBytes(this Encoding encoding, string value, IBufferWriter<byte> writer)
+    public static unsafe int GetBytes(this Encoding encoding, string value, IBufferWriter<byte> writer)
     {
         int byteCount = encoding.GetByteCount(value);
         Span<byte> buffer = writer.GetSpan(byteCount);
