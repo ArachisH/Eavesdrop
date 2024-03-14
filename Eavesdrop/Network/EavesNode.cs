@@ -260,7 +260,7 @@ public sealed class EavesNode : IDisposable
         int minBufferSize = (int)(request.Content?.Headers.ContentLength ?? -1);
 
         var content = new BufferedHttpContent(minBufferSize);
-        foreach ((string name, var values) in request.Content.Headers.NonValidated)
+        foreach ((string name, IEnumerable<string> values) in request.Content!.Headers.AsTuplePairs())
         {
             content.Headers.TryAddWithoutValidation(name, values);
         }

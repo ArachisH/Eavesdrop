@@ -50,21 +50,12 @@ public sealed class HttpResponseWriter : IBufferWriter<byte>, IDisposable
     }
     public void Write(HttpHeaders headers)
     {
-#if !NETSTANDARD2_0
-        foreach ((string name, HeaderStringValues values) in headers.NonValidated)
+        foreach ((string name, IEnumerable<string> values) in headers.AsTuplePairs())
         {
             Encoding.UTF8.GetBytes($"{name}: ", this);
             Encoding.UTF8.GetBytes(string.Join("; ", values), this);
             AppendLine();
         }
-#else
-        foreach (KeyValuePair<string, IEnumerable<string>> header in headers)
-        {
-            Encoding.UTF8.GetBytes($"{header.Key}: ", this);
-            Encoding.UTF8.GetBytes(string.Join("; ", header.Value), this);
-            AppendLine();
-        }
-#endif
     }
 
     public void Dispose()
