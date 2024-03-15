@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
 #if NETSTANDARD2_0
+using System.Reflection;
 using System.Collections.ObjectModel;
 #endif
 
@@ -16,6 +17,23 @@ public sealed class Certifier : ICertifier, IDisposable
     private readonly X509Store _rootStore, _myStore;
     private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
+#if NETSTANDARD2_0
+    #region CertificateRequest Reflection Traits
+    private static readonly Type CertificateRequestType;
+    private static readonly ConstructorInfo CertificateRequestConstructor;
+    private static readonly MethodInfo CreateMethod;
+    private static readonly MethodInfo CreateSelfSignedMethod;
+    private static readonly PropertyInfo PublicKeyProperty;
+    private static readonly PropertyInfo CertificateExtensionsProperty;
+    #endregion
+    #region SubjectAlternativeNameBuilder Reflection Traits
+    private static readonly Type SubjectAlternativeNameBuilderType;
+    private static readonly ConstructorInfo SubjectAlternativeNameBuilderConstructor;
+    private static readonly MethodInfo AddDnsNameMethod;
+    private static readonly MethodInfo BuildMethod;
+    #endregion
+#endif
+
     public string Issuer { get; }
     public string CertificateAuthorityName { get; }
 
@@ -25,6 +43,22 @@ public sealed class Certifier : ICertifier, IDisposable
 
     public X509Certificate2? Authority { get; private set; }
 
+#if NETSTANDARD2_0
+    static Certifier()
+    {
+        CertificateRequestType = typeof(RSACertificateExtensions).Assembly.GetType("System.Security.Cryptography.X509Certificates.CertificateRequest");
+        CertificateRequestConstructor = CertificateRequestType.GetConstructor([typeof(string), typeof(RSA), typeof(HashAlgorithmName), typeof(RSASignaturePadding)]);
+        CreateMethod = CertificateRequestType.GetMethod("Create", [typeof(X509Certificate2), typeof(DateTimeOffset), typeof(DateTimeOffset), typeof(byte[])]);
+        CertificateExtensionsProperty = CertificateRequestType.GetProperty("CertificateExtensions");
+        CreateSelfSignedMethod = CertificateRequestType.GetMethod("CreateSelfSigned");
+        PublicKeyProperty = CertificateRequestType.GetProperty("PublicKey");
+
+        SubjectAlternativeNameBuilderType = typeof(RSACertificateExtensions).Assembly.GetType("System.Security.Cryptography.X509Certificates.SubjectAlternativeNameBuilder");
+        SubjectAlternativeNameBuilderConstructor = SubjectAlternativeNameBuilderType.GetConstructor([]);
+        AddDnsNameMethod = SubjectAlternativeNameBuilderType.GetMethod("AddDnsName");
+        BuildMethod = SubjectAlternativeNameBuilderType.GetMethod("Build");
+    }
+#endif
     public Certifier()
         : this("Eavesdrop")
     { }
@@ -79,20 +113,16 @@ public sealed class Certifier : ICertifier, IDisposable
 #if NETSTANDARD2_0
     private X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
-        Type certificateRequestType = typeof(RSACertificateExtensions).Assembly.GetType("System.Security.Cryptography.X509Certificates.CertificateRequest");
-        object request = certificateRequestType.GetConstructor([typeof(string), typeof(RSA), typeof(HashAlgorithmName), typeof(RSASignaturePadding)])
-            .Invoke([subjectName, _sharedKeys, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1]);
+        object request = CertificateRequestConstructor.Invoke([subjectName, _sharedKeys, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1]);
 
-        var publicKey = (PublicKey)certificateRequestType.GetProperty("PublicKey").GetValue(request);
-        var extensions = (Collection<X509Extension>)certificateRequestType.GetProperty("CertificateExtensions").GetValue(request);
+        var publicKey = (PublicKey)PublicKeyProperty.GetValue(request);
+        var extensions = (Collection<X509Extension>)CertificateExtensionsProperty.GetValue(request);
         extensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
         extensions.Add(new X509SubjectKeyIdentifierExtension(publicKey, false));
 
         if (Authority == null)
         {
-            using var certificate = (X509Certificate2)certificateRequestType.GetMethod("CreateSelfSigned")
-                .Invoke(request, [(DateTimeOffset)NotBefore, (DateTimeOffset)NotAfter]);
-
+            using var certificate = (X509Certificate2)CreateSelfSignedMethod.Invoke(request, [(DateTimeOffset)NotBefore, (DateTimeOffset)NotAfter]);
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 certificate.FriendlyName = alternateName;
@@ -101,15 +131,11 @@ public sealed class Certifier : ICertifier, IDisposable
         }
         else
         {
-            Type subjectAlternateNameBuilderType = typeof(RSACertificateExtensions).Assembly.GetType("System.Security.Cryptography.X509Certificates.SubjectAlternativeNameBuilder");
-            object sanBuilder = subjectAlternateNameBuilderType.GetConstructor([]).Invoke(null);
-            subjectAlternateNameBuilderType.GetMethod("AddDnsName").Invoke(sanBuilder, [alternateName]);
+            object sanBuilder = SubjectAlternativeNameBuilderConstructor.Invoke(null);
+            AddDnsNameMethod.Invoke(sanBuilder, [alternateName]);
+            extensions.Add((X509Extension)BuildMethod.Invoke(sanBuilder, [false]));
 
-            extensions.Add((X509Extension)subjectAlternateNameBuilderType.GetMethod("Build").Invoke(sanBuilder, [false]));
-
-            using var certificate = (X509Certificate2)certificateRequestType
-                .GetMethod("Create", [typeof(X509Certificate2), typeof(DateTimeOffset), typeof(DateTimeOffset), typeof(byte[])])
-                .Invoke(request, [Authority, (DateTimeOffset)Authority.NotBefore, (DateTimeOffset)Authority.NotAfter, Guid.NewGuid().ToByteArray()]);
+            using var certificate = (X509Certificate2)CreateMethod.Invoke(request, [Authority, (DateTimeOffset)Authority.NotBefore, (DateTimeOffset)Authority.NotAfter, Guid.NewGuid().ToByteArray()]);
 
             // TODO: Copy with private key
 
