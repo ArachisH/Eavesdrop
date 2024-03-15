@@ -10,6 +10,9 @@ namespace Eavesdrop;
 
 public sealed class Certifier : ICertifier, IDisposable
 {
+    private const int KEY_SIZE = 2048;
+
+    private readonly RSA _sharedKeys;
     private readonly X509Store _rootStore, _myStore;
     private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
@@ -18,7 +21,6 @@ public sealed class Certifier : ICertifier, IDisposable
 
     public DateTime NotAfter { get; set; }
     public DateTime NotBefore { get; set; }
-    public int KeyLength { get; set; } = 1024;
     public bool IsCachingSignedCertificates { get; set; }
 
     public X509Certificate2? Authority { get; private set; }
@@ -34,6 +36,9 @@ public sealed class Certifier : ICertifier, IDisposable
     { }
     public Certifier(string issuer, string certificateAuthorityName, StoreLocation location)
     {
+        _sharedKeys = RSA.Create();
+        _sharedKeys.KeySize = KEY_SIZE;
+
         _myStore = new X509Store(StoreName.My, location);
         _rootStore = new X509Store(StoreName.Root, location);
         _certificateCache = new Dictionary<string, X509Certificate2>();
@@ -74,13 +79,9 @@ public sealed class Certifier : ICertifier, IDisposable
 #if NETSTANDARD2_0
     private X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
-        var rsa = Authority == null
-                ? new RSACryptoServiceProvider(KeyLength)
-                : new RSACryptoServiceProvider(KeyLength, new CspParameters(1, "Microsoft Base Cryptographic Provider v1.0", Guid.NewGuid().ToString()));
-
         Type certificateRequestType = typeof(RSACertificateExtensions).Assembly.GetType("System.Security.Cryptography.X509Certificates.CertificateRequest");
         object request = certificateRequestType.GetConstructor([typeof(string), typeof(RSA), typeof(HashAlgorithmName), typeof(RSASignaturePadding)])
-            .Invoke([subjectName, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1]);
+            .Invoke([subjectName, _sharedKeys, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1]);
 
         var publicKey = (PublicKey)certificateRequestType.GetProperty("PublicKey").GetValue(request);
         var extensions = (Collection<X509Extension>)certificateRequestType.GetProperty("CertificateExtensions").GetValue(request);
@@ -106,20 +107,19 @@ public sealed class Certifier : ICertifier, IDisposable
 
             extensions.Add((X509Extension)subjectAlternateNameBuilderType.GetMethod("Build").Invoke(sanBuilder, [false]));
 
-            using var certificate = (X509Certificate2)certificateRequestType.GetMethod("Create", [typeof(X509Certificate2), typeof(DateTimeOffset), typeof(DateTimeOffset), typeof(byte[])])
+            using var certificate = (X509Certificate2)certificateRequestType
+                .GetMethod("Create", [typeof(X509Certificate2), typeof(DateTimeOffset), typeof(DateTimeOffset), typeof(byte[])])
                 .Invoke(request, [Authority, (DateTimeOffset)Authority.NotBefore, (DateTimeOffset)Authority.NotAfter, Guid.NewGuid().ToByteArray()]);
 
             // TODO: Copy with private key
-            //certificate.PrivateKey = rsa;
 
             return new X509Certificate2(certificate.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
         }
     }
-#else
+#elif NET6_0_OR_GREATER
     public X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
-        using var rsa = RSA.Create(KeyLength);
-        var certificateRequest = new CertificateRequest(subjectName, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var certificateRequest = new CertificateRequest(subjectName, _sharedKeys, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         if (Authority == null)
         {
             certificateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
@@ -143,7 +143,7 @@ public sealed class Certifier : ICertifier, IDisposable
             certificateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(certificateRequest.PublicKey, false));
 
             using X509Certificate2 certificate = certificateRequest.Create(Authority, Authority.NotBefore, Authority.NotAfter, Guid.NewGuid().ToByteArray());
-            using X509Certificate2 certificateWithPrivateKey = certificate.CopyWithPrivateKey(rsa);
+            using X509Certificate2 certificateWithPrivateKey = certificate.CopyWithPrivateKey(_sharedKeys);
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
