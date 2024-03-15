@@ -13,12 +13,13 @@ public sealed class Certifier : ICertifier, IDisposable
 {
     private const int KEY_SIZE = 1024;
 
-    private readonly RSA _sharedPrivateKey;
-    private readonly RSA _sharedKeyPublicKey;
     private readonly X509Store _rootStore, _myStore;
     private readonly IDictionary<string, X509Certificate2> _certificateCache;
 
+    private RSA? _sharedKeyPublicKey;
+
 #if NETSTANDARD2_0
+    private RSA? _sharedPrivateKey;
     #region CertificateRequest Reflection Traits
     private static readonly Type CertificateRequestType;
     private static readonly ConstructorInfo CertificateRequestConstructor;
@@ -71,19 +72,6 @@ public sealed class Certifier : ICertifier, IDisposable
     { }
     public Certifier(string issuer, string certificateAuthorityName, StoreLocation location)
     {
-        _sharedKeyPublicKey = RSA.Create();
-        _sharedKeyPublicKey.KeySize = KEY_SIZE;
-
-        // Create an RSA instance that exposes the private keys by default when applying to a certificate.
-        var privateKeyParams = new CspParameters
-        {
-            Flags = CspProviderFlags.NoFlags,
-            KeyContainerName = Guid.NewGuid().ToString().ToUpperInvariant(),
-            ProviderType = ((Environment.OSVersion.Version.Major > 5) || ((Environment.OSVersion.Version.Major == 5) && (Environment.OSVersion.Version.Minor >= 1))) ? 0x18 : 1
-        };
-        _sharedPrivateKey = new RSACryptoServiceProvider(privateKeyParams);
-        _sharedPrivateKey.ImportParameters(_sharedKeyPublicKey.ExportParameters(true));
-
         _myStore = new X509Store(StoreName.My, location);
         _rootStore = new X509Store(StoreName.Root, location);
         _certificateCache = new Dictionary<string, X509Certificate2>();
@@ -124,6 +112,11 @@ public sealed class Certifier : ICertifier, IDisposable
 #if NETSTANDARD2_0
     private X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
+        if (_sharedKeyPublicKey == null)
+        {
+            _sharedKeyPublicKey = RSA.Create();
+            _sharedKeyPublicKey.KeySize = KEY_SIZE;
+        }
         object request = CertificateRequestConstructor.Invoke([subjectName, _sharedKeyPublicKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1]);
 
         var publicKey = (PublicKey)PublicKeyProperty.GetValue(request);
@@ -147,6 +140,18 @@ public sealed class Certifier : ICertifier, IDisposable
             extensions.Add((X509Extension)BuildMethod.Invoke(sanBuilder, [false]));
 
             using var certificate = (X509Certificate2)CreateMethod.Invoke(request, [Authority, (DateTimeOffset)Authority.NotBefore, (DateTimeOffset)Authority.NotAfter, Guid.NewGuid().ToByteArray()]);
+            if (_sharedPrivateKey == null)
+            {
+                // Create an RSA instance that exposes the private keys by default when applying to a certificate.
+                var privateKeyParams = new CspParameters
+                {
+                    Flags = CspProviderFlags.NoFlags,
+                    KeyContainerName = Guid.NewGuid().ToString().ToUpperInvariant(),
+                    ProviderType = ((Environment.OSVersion.Version.Major > 5) || ((Environment.OSVersion.Version.Major == 5) && (Environment.OSVersion.Version.Minor >= 1))) ? 0x18 : 1
+                };
+                _sharedPrivateKey = new RSACryptoServiceProvider(privateKeyParams);
+                _sharedPrivateKey.ImportParameters(_sharedKeyPublicKey.ExportParameters(true));
+            }
             certificate.PrivateKey = _sharedPrivateKey;
 
             return new X509Certificate2(certificate.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
@@ -155,6 +160,11 @@ public sealed class Certifier : ICertifier, IDisposable
 #elif NET6_0_OR_GREATER
     public X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
+        if (_sharedKeyPublicKey == null)
+        {
+            _sharedKeyPublicKey = RSA.Create();
+            _sharedKeyPublicKey.KeySize = KEY_SIZE;
+        }
         var certificateRequest = new CertificateRequest(subjectName, _sharedKeyPublicKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         if (Authority == null)
         {
@@ -288,5 +298,10 @@ public sealed class Certifier : ICertifier, IDisposable
 
         _myStore.Dispose();
         _rootStore.Dispose();
+
+        _sharedKeyPublicKey?.Dispose();
+#if NETSTANDARD2_0
+        _sharedPrivateKey?.Dispose();
+#endif
     }
 }
