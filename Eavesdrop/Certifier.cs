@@ -11,7 +11,7 @@ namespace Eavesdrop;
 
 public sealed class Certifier : ICertifier, IDisposable
 {
-    private const int KEY_SIZE = 2048;
+    private const int KEY_SIZE = 1024;
 
     private readonly RSA _sharedPrivateKey;
     private readonly RSA _sharedKeyPublicKey;
