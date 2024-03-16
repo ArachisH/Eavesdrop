@@ -7,12 +7,12 @@ public static class AdditionalHttpMethods
 
     static AdditionalHttpMethods()
     {
-#if NETSTANDARD2_0
-        Patch = new HttpMethod("PATCH");
-        Connect = new HttpMethod("CONNECT");
-#else
+#if NET7_0_OR_GREATER
         Patch = HttpMethod.Patch;
         Connect = HttpMethod.Connect;
+#else
+        Patch = new HttpMethod("PATCH");
+        Connect = new HttpMethod("CONNECT");
 #endif
     }
 }

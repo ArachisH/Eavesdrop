@@ -157,7 +157,7 @@ public sealed class Certifier : ICertifier, IDisposable
             return new X509Certificate2(certificate.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
         }
     }
-#elif NET6_0_OR_GREATER
+#elif NET5_0_OR_GREATER
     public X509Certificate2 CreateCertificate(string subjectName, string alternateName)
     {
         if (_sharedKeyPublicKey == null)

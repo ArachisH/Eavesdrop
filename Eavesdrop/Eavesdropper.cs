@@ -27,10 +27,10 @@ public static class Eavesdropper
         Task? interceptedTask = RequestInterceptedAsync?.Invoke(null, e);
         if (interceptedTask != null)
         {
-#if NETSTANDARD2_0
-            await interceptedTask;
-#else
+#if NET6_0_OR_GREATER
             await interceptedTask.WaitAsync(cancellationToken);
+#else
+            await interceptedTask;
 #endif
         }
     }
@@ -43,10 +43,10 @@ public static class Eavesdropper
         Task? interceptedTask = ResponseInterceptedAsync?.Invoke(null, e);
         if (interceptedTask != null)
         {
-#if NETSTANDARD2_0
-            await interceptedTask;
-#else
+#if NET6_0_OR_GREATER
             await interceptedTask.WaitAsync(cancellationToken);
+#else
+            await interceptedTask;
 #endif
         }
     }
