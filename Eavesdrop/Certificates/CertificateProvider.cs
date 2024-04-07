@@ -141,9 +141,12 @@ public sealed class CertificateProvider : IDisposable
                 }
                 TrustedRootCA?.Dispose();
 
-                foreach (X509Certificate2 cachedCertificate in _issuedCertificates.Values)
+                if (IsDisposingCachedCertificates)
                 {
-                    cachedCertificate.Dispose();
+                    foreach (X509Certificate2 cachedCertificate in _issuedCertificates.Values)
+                    {
+                        cachedCertificate.Dispose();
+                    }
                 }
                 _issuedCertificates.Clear();
             }
