@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 
 using Eavesdrop.Network.Http;
+using Eavesdrop.Certificates;
 
 namespace Eavesdrop.Network;
 
@@ -19,7 +20,7 @@ public sealed class EavesNode : IDisposable
     private static ReadOnlySpan<byte> _eolBytes => "\r\n"u8;
     private static ReadOnlySpan<byte> _eofBytes => "\r\n\r\n"u8;
 
-    private readonly ICertifier? _certifier;
+    private readonly CertificateProvider? _certProvider;
 
     private bool _disposed;
     private Stream _stream;
@@ -45,13 +46,13 @@ public sealed class EavesNode : IDisposable
             ["CONNECT"] = AdditionalHttpMethods.Connect
         };
     }
-    public EavesNode(Socket socket, ICertifier? certifier, bool isHandlingConnectRequests = true)
+    public EavesNode(Socket socket, CertificateProvider? certProvider, bool isHandlingConnectRequests = true)
     {
         IsHandlingConnectRequests = isHandlingConnectRequests;
 
         socket.NoDelay = true;
 
-        _certifier = certifier;
+        _certProvider = certProvider;
         _stream = new NetworkStream(socket, ownsSocket: true);
     }
 
@@ -77,12 +78,12 @@ public sealed class EavesNode : IDisposable
                 if (IsHandlingConnectRequests) return request;
 
                 await SendHttpResponseAsync(_okResponse, cancellationToken).ConfigureAwait(false);
-                if (_certifier == null)
+                if (_certProvider == null)
                 {
                     throw new NotSupportedException("Cannot process HTTPS upgrade without a certifier.");
                 }
 
-                X509Certificate2? certificate = _certifier?.GenerateCertificate(request.RequestUri.DnsSafeHost);
+                X509Certificate2? certificate = _certProvider?.IssueCertificate(request.RequestUri.DnsSafeHost);
                 if (certificate == null)
                 {
                     throw new NullReferenceException($"Failed to generate a self-signed certificate for '{request.RequestUri.DnsSafeHost}'.");

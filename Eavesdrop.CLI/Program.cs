@@ -37,7 +37,7 @@ public class Program
         //Eavesdropper.IsActingAsForwardingServer = true;
 
         /* Otherwise, to be able to decrypt HTTPS traffic, we need to install a self-signed certificate to the root store. */
-        Eavesdropper.Certifier?.CreateTrustedRootCertificate();
+        Eavesdropper.CertProvider?.TryCreateTrustedRootCA("Eavesdrop");
 
         Eavesdropper.Initiate(12030);
         Console.WriteLine("Press any key to terminate the application at any time...");

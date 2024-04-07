@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 
 using Eavesdrop.Network;
-using Eavesdrop.Tests.Certificates;
+using Eavesdrop.Certificates;
 
 namespace Eavesdrop.Tests;
 
@@ -53,10 +53,10 @@ public class EavesNodeTests
          */
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
-        var emptyCertifier = new SelfSignedCertificateHandler();
+        var certProvider = new CertificateProvider();
         var (client, server) = await CreateConnectedPairAsync();
 
-        using var node = new EavesNode(server, emptyCertifier, false);
+        using var node = new EavesNode(server, certProvider, false);
         using var clientStream = new NetworkStream(client, true);
 
         Task<HttpRequestMessage> serverReceiveTask = node.ReceiveHttpRequestAsync();

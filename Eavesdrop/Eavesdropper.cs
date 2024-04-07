@@ -5,6 +5,7 @@ using System.Net.Sockets;
 
 using Eavesdrop.Network;
 using Eavesdrop.Network.Http;
+using Eavesdrop.Certificates;
 
 namespace Eavesdrop;
 
@@ -78,8 +79,7 @@ public static class Eavesdropper
         }
     }
 
-    public static Certifier? Certifier { get; set; }
-    public static Certifier DefaultCertifier { get; }
+    public static CertificateProvider CertProvider { get; }
 
     public static List<string> Targets { get; }
     public static List<string> IntranetHosts { get; }
@@ -123,7 +123,7 @@ public static class Eavesdropper
 
         Targets = new List<string>();
         IntranetHosts = new List<string>();
-        Certifier = DefaultCertifier = new Certifier("Eavesdrop", "Eavesdrop Root Certificate Authority");
+        CertProvider = new CertificateProvider();
     }
 
     public static void Terminate()
@@ -249,7 +249,7 @@ public static class Eavesdropper
     }
     private static async Task HandleSocketAsync(Socket client, CancellationToken cancellationToken = default)
     {
-        using var local = new EavesNode(client, Certifier, IsActingAsForwardingServer);
+        using var local = new EavesNode(client, CertProvider, IsActingAsForwardingServer);
 
         RequestInterceptedEventArgs? requestArgs = null;
         ResponseInterceptedEventArgs? responseArgs = null;
