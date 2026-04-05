@@ -1,9 +1,11 @@
 ﻿#if NET5_0_OR_GREATER
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Eavesdrop.Certificates.Windows;
 
+[SupportedOSPlatform("Windows")]
 public sealed partial class WindowsCertificateEngine
 {
     public WindowsCertificateEngine(RSA rsa)
