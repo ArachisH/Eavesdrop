@@ -19,31 +19,40 @@ public sealed partial class WindowsCertificateEngine
 
     private X509Certificate2 ConductCertificateRequest(string subjectName, string alternativeName, X509Certificate2? issuerCertificate, DateTime notBefore, DateTime notAfter)
     {
+        X509Certificate2? certificateToExport = null;
         var certificateRequest = new CertificateRequest(subjectName, _rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        if (issuerCertificate == null)
-        {
-            certificateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
-            certificateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(certificateRequest.PublicKey, false));
 
-            using X509Certificate2 certificate = certificateRequest.CreateSelfSigned(notBefore.ToUniversalTime(), notAfter.ToUniversalTime());
+        certificateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        certificateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(certificateRequest.PublicKey, false));
 
-            certificate.FriendlyName = alternativeName;
-            return new X509Certificate2(certificate.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
-        }
-        else
+        if (issuerCertificate != null)
         {
             var sanBuilder = new SubjectAlternativeNameBuilder();
             sanBuilder.AddDnsName(alternativeName);
 
             certificateRequest.CertificateExtensions.Add(sanBuilder.Build());
-            certificateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
-            certificateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(certificateRequest.PublicKey, false));
 
-            using X509Certificate2 certificate = certificateRequest.Create(issuerCertificate, issuerCertificate.NotBefore, issuerCertificate.NotAfter, Guid.NewGuid().ToByteArray());
-            using X509Certificate2 certificateWithPrivateKey = certificate.CopyWithPrivateKey(_rsa);
+            using X509Certificate2 certificate = certificateRequest.Create(
+                issuerCertificate, issuerCertificate.NotBefore, issuerCertificate.NotAfter, Guid.NewGuid().ToByteArray());
 
-            certificateWithPrivateKey.FriendlyName = alternativeName;
-            return new X509Certificate2(certificateWithPrivateKey.Export(X509ContentType.Pfx, string.Empty), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+            certificateToExport = certificate.CopyWithPrivateKey(_rsa);
+        }
+        else
+        {
+            certificateToExport = certificateRequest.CreateSelfSigned(
+                notBefore.ToUniversalTime(), notAfter.ToUniversalTime());
+        }
+
+        using (certificateToExport)
+        {
+            certificateToExport.FriendlyName = alternativeName;
+#if NET9_0_OR_GREATER
+            return X509CertificateLoader.LoadPkcs12(certificateToExport.Export(X509ContentType.Pfx, string.Empty),
+                string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+#else
+            return new X509Certificate2(certificateToExport.Export(X509ContentType.Pfx, string.Empty),
+                string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+#endif
         }
     }
 
