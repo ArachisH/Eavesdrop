@@ -121,8 +121,8 @@ public static class Eavesdropper
             ServerCertificateCustomValidationCallback = static (_, _, _, _) => true
         });
 
-        Targets = new List<string>();
-        IntranetHosts = new List<string>();
+        Targets = [];
+        IntranetHosts = [];
         CertProvider = new CertificateProvider();
     }
 
