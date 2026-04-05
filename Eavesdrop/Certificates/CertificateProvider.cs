@@ -23,12 +23,8 @@ public sealed class CertificateProvider : IDisposable
     public bool IsDisposingCachedCertificates { get; set; } = true;
 
     public CertificateProvider()
-    {
-        _issuedCertificates = [];
-
-        Engine = GetCertificateEngine();
-        IsDisposingCertificateEngine = true;
-    }
+        : this(GetCertificateEngine(), true)
+    { }
     public CertificateProvider(ICertificateEngine engine, bool ownsEngine = true)
     {
         _issuedCertificates = [];
