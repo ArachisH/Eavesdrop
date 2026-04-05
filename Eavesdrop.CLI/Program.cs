@@ -46,7 +46,7 @@ public class Program
         Eavesdropper.Terminate();
     }
 
-    private static async Task Eavesdropper_RequestInterceptedAsync(object sender, RequestInterceptedEventArgs e)
+    private static Task Eavesdropper_RequestInterceptedAsync(object sender, RequestInterceptedEventArgs e)
     {
         Console.WriteLine("----[ HTTP Request ]");
         Console.WriteLine($"    {e.Method} {e.Uri} {e.Version}");
@@ -54,11 +54,7 @@ public class Program
         {
             Console.WriteLine($"    {item.Key}: {string.Join(", ", item.Value)}");
         }
-        if (e.Content != null)
-        {
-            Console.WriteLine("----[ HTTP Request Content ]");
-            Console.WriteLine("    " + Encoding.UTF8.GetString(await e.Content.ReadAsByteArrayAsync().ConfigureAwait(false)));
-        }
+        return Task.CompletedTask;
     }
     private static Task Eavesdropper_ResponseInterceptedAsync(object sender, ResponseInterceptedEventArgs e)
     {
