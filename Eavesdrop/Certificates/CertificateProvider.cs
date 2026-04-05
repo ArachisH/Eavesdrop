@@ -67,7 +67,7 @@ public sealed class CertificateProvider : IDisposable
         if (rootCA == null)
         {
             rootCA = Engine.CreateSelfSigned(commonName, organization, NotBefore, NotAfter);
-            IsRootCATrusted = addToUserStore && TryAddCertificateToRootStore(RootCertificateAuthority);
+            IsRootCATrusted = addToUserStore && TryAddCertificateToRootStore(rootCA);
         }
 
         RootCertificateAuthority = rootCA;
