@@ -35,22 +35,17 @@ public sealed class CertificateProvider : IDisposable
 
     public X509Certificate2? IssueCertificate(string name)
     {
-        if (TrustedRootCA == null)
-        {
-            throw new InvalidOperationException("Must first add a self-signed certificate authority to the root store before issuing any certificates.");
+        return _issuedCertificates.GetOrAdd(name, CreateCertificate);
         }
-
-        if (!_issuedCertificates.TryGetValue(name, out X509Certificate2? certificate))
+    private X509Certificate2 CreateCertificate(string name)
         {
-            certificate = Engine.Create(name, TrustedRootCA, NotBefore, NotAfter);
-            if (!_issuedCertificates.TryAdd(name, certificate))
-            {
-                throw new Exception("Failed to cache the issued certificate: " + certificate);
+        return RootCertificateAuthority != null
+            ? Engine.Create(name, RootCertificateAuthority, NotBefore, NotAfter)
+            : throw new InvalidOperationException("Must first add a self-signed certificate authority to the root store before issuing any certificates.");
             }
-        }
 
-        return certificate;
-    }
+
+
     public bool TryCreateTrustedRootCA(string name, string issuerName)
     {
         string subject = $"CN={name}, O={issuerName}";
