@@ -83,11 +83,8 @@ public sealed class EavesNode : IDisposable
                     throw new NotSupportedException("Cannot process HTTPS upgrade without a certifier.");
                 }
 
-                X509Certificate2? certificate = _certProvider?.IssueCertificate(request.RequestUri.DnsSafeHost);
-                if (certificate == null)
-                {
-                    throw new NullReferenceException($"Failed to generate a self-signed certificate for '{request.RequestUri.DnsSafeHost}'.");
-                }
+                X509Certificate2? certificate = (_certProvider?.IssueCertificate(request.RequestUri.DnsSafeHost))
+                    ?? throw new NullReferenceException($"Failed to generate a self-signed certificate for '{request.RequestUri.DnsSafeHost}'.");
 
                 var sslStream = new SslStream(_stream);
 #if !NETSTANDARD2_0
@@ -140,19 +137,21 @@ public sealed class EavesNode : IDisposable
         {
             responseWriter.Write(response.Content.Headers);
         }
+
         responseWriter.Write(response.Headers);
-
         responseWriter.AppendLine();
-        await responseWriter.WriteToAsync(_stream, cancellationToken).ConfigureAwait(false);
-        if (response.Content == null || response.Content == _okResponse.Content || response.RequestMessage?.Method == AdditionalHttpMethods.Connect) return;
 
+        await responseWriter.WriteToAsync(_stream, cancellationToken).ConfigureAwait(false);
+
+        if (response.Content == null || response.Content == _okResponse.Content) return;
+
+#if !NETSTANDARD2_0
+        using Stream responseContentStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+#else
+        using Stream responseContentStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+#endif
         if (response.Headers.TransferEncodingChunked == true)
         {
-#if !NETSTANDARD2_0
-            using Stream chunkedEncodingStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-#else
-            using Stream chunkedEncodingStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-#endif
             using IMemoryOwner<byte> chunkBufferOwner = MemoryPool<byte>.Shared.Rent((MINIMUM_HTTP_BUFFER_SIZE / 4) + 16);
 
             Memory<byte> endOfLine = chunkBufferOwner.Memory.Slice(0, 2);
@@ -163,7 +162,7 @@ public sealed class EavesNode : IDisposable
             _eolBytes.CopyTo(endOfLine.Span);
             do
             {
-                bytesRead = await chunkedEncodingStream.ReadAsync(chunkBuffer, cancellationToken).ConfigureAwait(false);
+                bytesRead = await responseContentStream.ReadAsync(chunkBuffer, cancellationToken).ConfigureAwait(false);
 
                 int headerSize = ApplyChunkHeader(bytesRead, chunkHeaderBuffer.Span);
                 await _stream.WriteAsync(chunkHeaderBuffer.Slice(0, headerSize), cancellationToken).ConfigureAwait(false);
