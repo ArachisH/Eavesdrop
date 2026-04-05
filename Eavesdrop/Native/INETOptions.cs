@@ -5,12 +5,11 @@ namespace Eavesdrop;
 
 public static class INETOptions
 {
-    private static readonly object _stateLock;
-
-    static INETOptions()
-    {
-        _stateLock = new object();
-    }
+#if NET9_0_OR_GREATER
+    private static readonly Lock _stateLock = new();
+#else
+    private static readonly object _stateLock = new();
+#endif
 
     public unsafe static void Save(string? proxyAddress, string? autoConfigPath, bool isApplyingProxyExplicitly = false)
     {
