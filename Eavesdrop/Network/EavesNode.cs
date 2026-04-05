@@ -179,11 +179,12 @@ public sealed class EavesNode : IDisposable
         }
         else
         {
-#if !NETSTANDARD2_0
-            await response.Content.CopyToAsync(_stream, cancellationToken).ConfigureAwait(false);
-#else
-            await response.Content.CopyToAsync(_stream).ConfigureAwait(false);
-#endif
+            Task remoteToLocalCopyTask = responseContentStream.CopyToAsync(_stream, MINIMUM_HTTP_BUFFER_SIZE * 80, cancellationToken);
+            Task localToRemoteCopyTask = responseContentStream.CanWrite ? _stream.CopyToAsync(responseContentStream, MINIMUM_HTTP_BUFFER_SIZE * 80, cancellationToken) : remoteToLocalCopyTask;
+
+            // Wait for any of the two streams to exhaust themselves, which should typically indicate that the request/response content exchange was completed.
+            // Otherwise, if the remote stream does not support writing, only wait for it to have been completely copied into the local stream.
+            await Task.WhenAny(remoteToLocalCopyTask, localToRemoteCopyTask).ConfigureAwait(false);
         }
         await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
     }

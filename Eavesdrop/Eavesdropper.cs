@@ -305,19 +305,6 @@ public static class Eavesdropper
             // Send Response(s) to Client
             HttpResponseMessage response = responseArgs?.Response ?? ogResponse;
             await local.SendHttpResponseAsync(response, cancellationToken).ConfigureAwait(false);
-            if (wasProxiedExternally)
-            {
-#if NETSTANDARD2_0
-                using Stream remoteStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-#else
-                using Stream remoteStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-#endif
-                Task remoteToLocalClampTask = ClampStreamsAsync(remoteStream, local.Stream);
-                Task localToRemoteClampTask = ClampStreamsAsync(local.Stream, remoteStream);
-
-                // Wait for any of the two streams to exhaust themselves, which should typically indicate that the request/response exchange was completed.
-                await Task.WhenAny(remoteToLocalClampTask, localToRemoteClampTask).ConfigureAwait(false);
-            }
         }
         finally
         {
@@ -350,23 +337,5 @@ public static class Eavesdropper
 
         request.RequestUri = proxyUri;
         return true;
-    }
-    private static async Task ClampStreamsAsync(Stream fromStream, Stream toStream)
-    {
-        // Immediately return to the previous context.
-        await Task.Yield();
-
-        using IMemoryOwner<byte> bufferOwner = MemoryPool<byte>.Shared.Rent(512);
-        Memory<byte> buffer = bufferOwner.Memory;
-
-        int bytesRead = 0;
-        while (fromStream.CanRead && toStream.CanWrite)
-        {
-            bytesRead = await fromStream.ReadAsync(buffer).ConfigureAwait(false);
-            if (bytesRead < 1) break;
-
-            await toStream.WriteAsync(buffer.Slice(0, bytesRead)).ConfigureAwait(false);
-            await toStream.FlushAsync().ConfigureAwait(false);
-        }
     }
 }
