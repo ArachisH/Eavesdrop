@@ -68,16 +68,16 @@ public static class Eavesdropper
             {
                 _selfBypassProxy.Proxy = value;
 
-                _handler.Proxy = _selfBypassProxy;
                 _handler.UseProxy = true;
+                _handler.Proxy = _selfBypassProxy;
             }
             else // There may(big MAY) be a race condition here, so disable the proxy gracefully to reduce possibility of recursive interception.
             {
                 // Proxy destination is required for this mode to be active.
                 _isActingAsForwardingServer = false;
 
-                _handler.UseProxy = false;
                 _handler.Proxy = null;
+                _handler.UseProxy = false;
             }
         }
     }
@@ -111,7 +111,6 @@ public static class Eavesdropper
 
     static Eavesdropper()
     {
-        _stateLock = new object();
         _selfBypassProxy = new SelfBypassWebProxy();
 
         _client = new HttpClient(_handler = new HttpClientHandler
