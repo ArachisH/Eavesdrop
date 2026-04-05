@@ -1,6 +1,5 @@
 ﻿using System.Net;
 using System.Text;
-using System.Buffers;
 using System.Net.Sockets;
 
 using Eavesdrop.Network;
