@@ -1,7 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-namespace Eavesdrop.Certificates;
+namespace Eavesdrop.Certificates.Windows;
 
 public sealed partial class WindowsCertificateEngine : ICertificateEngine
 {

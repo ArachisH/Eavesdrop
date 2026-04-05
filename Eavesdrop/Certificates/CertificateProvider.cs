@@ -2,6 +2,9 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
+using Eavesdrop.Certificates.Linux;
+using Eavesdrop.Certificates.Windows;
+
 namespace Eavesdrop.Certificates;
 
 public sealed class CertificateProvider : IDisposable
