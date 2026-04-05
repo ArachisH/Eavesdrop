@@ -135,10 +135,8 @@ public sealed class CertificateProvider : IDisposable
     }
     private void Dispose(bool disposing)
     {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
+        if (!disposing || _disposed) return;
+
                 if (IsDisposingCertificateEngine)
                 {
                     Engine.Dispose();
@@ -153,8 +151,6 @@ public sealed class CertificateProvider : IDisposable
                     }
                 }
                 _issuedCertificates.Clear();
-            }
             _disposed = true;
         }
     }
-}
