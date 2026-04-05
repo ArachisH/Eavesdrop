@@ -10,7 +10,7 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     environment: Production
     
     steps:
@@ -20,9 +20,9 @@ jobs:
         fetch-depth: 0
 
     - name: .NET Setup
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 10.0.x
 
     - name: Install GitVersion
       uses: gittools/actions/gitversion/setup@v0
@@ -38,11 +38,8 @@ jobs:
     - name: Building
       run: dotnet build -c Release --no-restore -v normal
 
-    - name: Testing (.NET 5)
-      run: dotnet test -c Release --no-restore --no-build -v normal -f net5.0
-
-    - name: Testing (.NET Core 2)
-      run: dotnet test -c Release --no-restore --no-build -v normal -f netcoreapp2.0
+    - name: Testing (.NET 10)
+      run: dotnet test -c Release --no-restore --no-build -v normal -f net10.0
 
     - name: Packing (w/ Symbols)
       run: dotnet pack -c Release --no-restore --no-build -v normal -o ${{ env.PACKAGE_OUTPUT }} -p:Version=${{ env.GitVersion_SemVer }} -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
