@@ -23,9 +23,9 @@ public class EavesNodeTests
         using var clientStream = new NetworkStream(client, true);
 
         byte[] getBytes = Encoding.UTF8.GetBytes("GET http://example.com/foo HTTP/1.1\r\nHost: example.com\r\n\r\n");
-        await clientStream.WriteAsync(getBytes, 0, getBytes.Length);
+        await clientStream.WriteAsync(getBytes, TestContext.Current.CancellationToken);
 
-        var request = await node.ReceiveHttpRequestAsync();
+        var request = await node.ReceiveHttpRequestAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Get, request.Method);
         Assert.Equal("http://example.com/foo", request.RequestUri?.ToString());
@@ -59,11 +59,11 @@ public class EavesNodeTests
         using var node = new EavesNode(server, certProvider, false);
         using var clientStream = new NetworkStream(client, true);
 
-        Task<HttpRequestMessage> serverReceiveTask = node.ReceiveHttpRequestAsync();
+        Task<HttpRequestMessage> serverReceiveTask = node.ReceiveHttpRequestAsync(TestContext.Current.CancellationToken);
 
         using var sslClientStream = await AuthenticateAsClientAsync(clientStream, "example.com");
         byte[] getBytes = Encoding.UTF8.GetBytes("GET /foo HTTP/1.1\r\nHost: example.com\r\n\r\n");
-        await sslClientStream.WriteAsync(getBytes, 0, getBytes.Length);
+        await sslClientStream.WriteAsync(getBytes, TestContext.Current.CancellationToken);
 
         var request = await serverReceiveTask;
 
@@ -87,11 +87,11 @@ public class EavesNodeTests
     {
         byte[] connectBytes = Encoding.UTF8.GetBytes($"CONNECT {hostname}:443 HTTP/1.1\r\n\r\n");
 
-        await clientStream.WriteAsync(connectBytes, 0, connectBytes.Length);
-        await clientStream.FlushAsync();
+        await clientStream.WriteAsync(connectBytes, TestContext.Current.CancellationToken);
+        await clientStream.FlushAsync(TestContext.Current.CancellationToken);
 
         byte[] okBytesBuffer = new byte[32];
-        int read = await clientStream.ReadAsync(okBytesBuffer, 0, okBytesBuffer.Length);
+        int read = await clientStream.ReadAsync(okBytesBuffer, TestContext.Current.CancellationToken);
 
         string okResponse = Encoding.UTF8.GetString(okBytesBuffer, 0, read);
         Assert.Equal("HTTP/1.1 200 OK\r\n\r\n", okResponse);
