@@ -11,7 +11,11 @@ namespace Eavesdrop;
 
 public static class Eavesdropper
 {
-    private static readonly object _stateLock;
+#if NET9_0_OR_GREATER
+    private static readonly Lock _stateLock = new();
+#else
+    private static readonly object _stateLock = new();
+#endif
     private static readonly HttpClient _client;
     private static readonly HttpClientHandler _handler;
     private static readonly SelfBypassWebProxy _selfBypassProxy;
