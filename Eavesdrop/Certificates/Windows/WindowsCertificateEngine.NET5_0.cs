@@ -49,14 +49,10 @@ public sealed partial class WindowsCertificateEngine
 
     private void Dispose(bool disposing)
     {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
-                _rsa.Dispose();
-            }
-            _disposed = true;
-        }
+        if (!disposing || _disposed) return;
+
+        _rsa.Dispose();
+        _disposed = true;
     }
 }
 #endif
