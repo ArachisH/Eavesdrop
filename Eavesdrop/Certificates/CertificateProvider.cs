@@ -86,6 +86,10 @@ public sealed class CertificateProvider : IDisposable
         {
             return new WindowsCertificateEngine();
         }
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return new LinuxCertificateEngine();
+        }
         throw new PlatformNotSupportedException("Currently unable to perform certificate generation on current platform.");
     }
     private static X509Certificate2? GetTrustedRootCAFromStore(string subject)
