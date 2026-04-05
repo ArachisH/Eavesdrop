@@ -54,6 +54,8 @@ public class EavesNodeTests
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
         var certProvider = new CertificateProvider();
+        certProvider.TryCreateTrustedRootCA("Eavesdrop", "Eavesdrop.Tests", false);
+
         var (client, server) = await CreateConnectedPairAsync();
 
         using var node = new EavesNode(server, certProvider, false);
