@@ -1,5 +1,6 @@
 # Eavesdrop
-[![Build CI](https://github.com/ArachisH/Eavesdrop/actions/workflows/build.yaml/badge.svg)](https://github.com/ArachisH/Eavesdrop/actions)
+[![CI Workflow](https://github.com/ArachisH/Eavesdrop/actions/workflows/ci.yaml/badge.svg)](https://github.com/ArachisH/Eavesdrop/actions/workflows/ci.yaml)
+[![CD Workflow](https://github.com/ArachisH/Eavesdrop/actions/workflows/cd.yaml/badge.svg)](https://github.com/ArachisH/Eavesdrop/actions/workflows/cd.yaml)
 [![NuGet](https://img.shields.io/nuget/v/Eavesdrop?label=NuGet)](https://www.nuget.org/packages/Eavesdrop)
 ![License](https://img.shields.io/github/license/ArachisH/Eavesdrop?label=License)
 
