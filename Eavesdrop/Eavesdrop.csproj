@@ -11,15 +11,20 @@
 	<PropertyGroup>
 		<DebugType>embedded</DebugType>
 		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<!-- Must be explicitly set when targeting frameworks lower than .NET 8 -->
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
 		<RepositoryUrl>https://github.com/ArachisH/Eavesdrop</RepositoryUrl>
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<Title>Eavesdropper</Title>
+		<Title>Eavesdrop</Title>
 		<Authors>ArachisH</Authors>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<Copyright>Copyright (c) ArachisH 2026</Copyright>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<Description>HTTP(S) proxy server for Windows machines that allows for the interception, and modification of all HTTP/HTTPS traffic.</Description>
+		<PackageProjectUrl>https://github.com/ArachisH/Eavesdrop</PackageProjectUrl>
+		<PackageTags>proxy;http-proxy;https-proxy;interception;traffic-inspection;windows;networking;diagnostics</PackageTags>
+		<Description>A Windows HTTP(S) interception proxy for .NET that allows applications to inspect, block, modify, and forward HTTP/HTTPS traffic.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -31,7 +36,7 @@
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
 		<PackageReference Include="System.Memory" Version="4.6.3" />
-		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
 	</ItemGroup>
 
 </Project>
