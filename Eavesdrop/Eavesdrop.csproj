@@ -8,24 +8,17 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-	</PropertyGroup>
-
 	<PropertyGroup>
-		<IncludeSymbols>true</IncludeSymbols>
+		<DebugType>embedded</DebugType>
 		<PublishRepositoryUrl>true</PublishRepositoryUrl>
-		<EmbedUntrackedSources>true</EmbedUntrackedSources>
-		<AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+		<RepositoryUrl>https://github.com/ArachisH/Eavesdrop</RepositoryUrl>
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<Version>2.0.0</Version>
 		<Title>Eavesdropper</Title>
 		<Authors>ArachisH</Authors>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<RepositoryUrl>https://github.com/ArachisH/Eavesdrop</RepositoryUrl>
 		<Description>HTTP(S) proxy server for Windows machines that allows for the interception, and modification of all HTTP/HTTPS traffic.</Description>
 	</PropertyGroup>
 
