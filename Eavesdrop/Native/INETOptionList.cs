@@ -6,8 +6,8 @@ namespace Eavesdrop;
 /// Contains the list of options for a particular Internet connection.
 /// </summary>
 /// <remarks>INTERNET_PER_CONN_OPTION_LIST structure (wininet.h)</remarks>
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe ref struct INETOptionList
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal unsafe struct INETOptionList
 {
     /// <summary>
     /// Size of the structure, in bytes.
